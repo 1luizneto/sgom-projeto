@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Banco de Dados
+  db:
+    image: postgres:15
+    container_name: sgom_db
+    environment:
+      - POSTGRES_DB=sgom_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - sgom_network
+
+  # Backend (Django)
+  backend:
+    build: ./backend
+    container_name: sgom_backend
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_NAME=sgom_db
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+    networks:
+      - sgom_network
+
+  # Frontend (React)
+  frontend:
+    build: ./frontend
+    container_name: sgom_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - CHOKIDAR_USEPOLLING=true # Importante para hot-reload no Windows
+    networks:
+      - sgom_network
+
+volumes:
+  postgres_data:
+
+
+networks:
+  sgom_network:
+    driver: bridge

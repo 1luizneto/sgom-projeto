@@ -1,0 +1,15 @@
+# Python / Django
+__pycache__/
+*.py[cod]
+venv/
+.env
+db.sqlite3
+
+# Node / React
+node_modules/
+dist/
+.DS_Store
+
+# Docker
+.docker_data/
+postgres_data/

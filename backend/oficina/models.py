@@ -10,7 +10,7 @@ class Produto(models.Model):
     preco_venda = models.DecimalField(max_digits=10, decimal_places=2)
     qtd_estoque = models.IntegerField(default=0)
     estoque_minimo = models.IntegerField(default=5)
-    
+
     # Referência ao app 'usuarios'
     fornecedor = models.ForeignKey('usuarios.Fornecedor', on_delete=models.SET_NULL, null=True)
 

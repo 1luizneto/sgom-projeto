@@ -7,7 +7,6 @@ class Cliente(models.Model):
     telefone = models.CharField(max_length=20)
     email = models.EmailField(blank=True, null=True)
     endereco = models.TextField()
-
     def __str__(self):
         return f"{self.nome} ({self.cpf})"
 

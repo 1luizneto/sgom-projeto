@@ -9,6 +9,7 @@ class Cliente(models.Model):
     endereco = models.TextField()
     #oi
     #agora vai
+    #teste
     def __str__(self):
         return f"{self.nome} ({self.cpf})"
 

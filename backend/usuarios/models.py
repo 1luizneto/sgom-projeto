@@ -20,6 +20,8 @@ class Mecanico(models.Model):
     cpf = models.CharField(max_length=14, unique=True)
     telefone = models.CharField(max_length=20)
     email = models.EmailField()
+    endereco = models.TextField()
+    #teste
 
     def __str__(self):
         return self.nome

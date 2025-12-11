@@ -10,7 +10,7 @@ class Cliente(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.cpf})"
-
+#mais um teste
 class Mecanico(models.Model):
     id_mecanico = models.AutoField(primary_key=True)
     # Futuramente podes vincular ao User do Django aqui

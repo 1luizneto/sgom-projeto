@@ -20,6 +20,8 @@ class Mecanico(models.Model):
     endereco = models.TextField()
 
     is_mecanico = models.BooleanField(default=True)
+    # Credenciais de acesso vinculadas ao sistema de autenticação do Django
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='mecanico', null=True, blank=True)
     
 
     def __str__(self):

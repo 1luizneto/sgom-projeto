@@ -18,15 +18,18 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from usuarios.views import MecanicoViewSet, ClienteViewSet
-from veiculos.views import VeiculoViewSet, cadastrar_veiculo
+from veiculos.views import VeiculoViewSet, AgendamentoViewSet, cadastrar_veiculo, agenda_mecanico
 
 router = DefaultRouter()
 router.register(r'mecanicos', MecanicoViewSet, basename='mecanico')
 router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'veiculos', VeiculoViewSet, basename='veiculo')
+router.register(r'agendamentos', AgendamentoViewSet, basename='agendamento')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    # UI PB04 veículo
     path('veiculos/cadastrar/', cadastrar_veiculo, name='cadastrar_veiculo'),
+    path('agenda/', agenda_mecanico, name='agenda_mecanico'),
 ]

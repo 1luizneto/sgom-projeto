@@ -1,24 +1,61 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
+from rest_framework import viewsets, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.shortcuts import render
 from django.contrib import messages
-from django.contrib.auth.models import User
-from django.utils.crypto import get_random_string
 from django.core.mail import send_mail
-from django.conf import settings
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
-from usuarios.models import Cliente
-from .models import Veiculo
-from .serializers import VeiculoSerializer
+from django.contrib.auth.models import User
+from django.utils import timezone
+from .models import Agendamento
+from .serializers import AgendamentoSerializer
+
+from rest_framework.decorators import api_view
+
+from .models import Veiculo, Agendamento, Servico
+from .serializers import VeiculoSerializer, AgendamentoSerializer
+from usuarios.models import Cliente, Mecanico
 
 class VeiculoViewSet(viewsets.ModelViewSet):
-    queryset = Veiculo.objects.select_related('cliente').all()
+    queryset = Veiculo.objects.all()
     serializer_class = VeiculoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
+
+# PB01/PB02: Agendamentos
+class AgendamentoViewSet(viewsets.ModelViewSet):
+    queryset = Agendamento.objects.all().select_related('cliente', 'veiculo', 'mecanico', 'servico')
+    serializer_class = AgendamentoSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save()
+        agendamento = serializer.save()
+        # notificação simples por email para o cliente (se email existir) e log para mecânico
+        if agendamento.cliente.email:
+            try:
+                send_mail(
+                    subject='SGOM: Agendamento confirmado',
+                    message=(
+                        f"Olá {agendamento.cliente.nome}, seu agendamento foi confirmado.\n"
+                        f"Serviço: {agendamento.servico.descricao}\n"
+                        f"Horário: {agendamento.horario_inicio}"
+                    ),
+                    from_email='no-reply@sgom.local',
+                    recipient_list=[agendamento.cliente.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
 
+    @action(detail=False, methods=['get'], url_path='futuros')
+    def futuros(self, request):
+        qs = self.get_queryset().filter(horario_inicio__gte=timezone.now()).order_by('horario_inicio')
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            ser = self.get_serializer(page, many=True)
+            return self.get_paginated_response(ser.data)
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data)
+
+# UI PB04 existente
 # Remover exigência de login para permitir pré-visualização da UI
 # @login_required
 def cadastrar_veiculo(request):
@@ -54,75 +91,70 @@ def cadastrar_veiculo(request):
             # Criar usuário/credenciais semelhantes à ClienteViewSet
             base_username = (novo_email.split('@')[0] if novo_email else novo_nome.split(' ')[0].lower())
             username = base_username
-            counter = 1
+            i = 1
             while User.objects.filter(username=username).exists():
-                username = f"{base_username}{counter}"
-                counter += 1
-
-            password = get_random_string(length=10)
-            user = User.objects.create_user(username=username, email=(novo_email or ''), password=password)
-            user.first_name = novo_nome
-            user.save()
-
+                username = f"{base_username}{i}"
+                i += 1
+            password = User.objects.make_random_password(length=10)
+            user = User.objects.create_user(username=username, email=novo_email or '', password=password)
             cliente = Cliente.objects.create(
-                user=user,
                 nome=novo_nome,
                 cpf=novo_cpf,
                 telefone=novo_telefone,
-                email=(novo_email or None),
+                email=novo_email or None,
                 endereco=novo_endereco,
+                user=user,
             )
-
-            # Envio de email com credenciais (se email fornecido)
             if novo_email:
-                subject = 'Credenciais de acesso - SGOM'
-                message = (
-                    f"Olá {novo_nome},\n\n"
-                    f"Seu acesso foi criado.\n"
-                    f"Login: {username}\n"
-                    f"Senha provisória: {password}\n\n"
-                    f"Por favor, altere sua senha no primeiro acesso."
-                )
-                from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sgom.local')
                 try:
-                    send_mail(subject, message, from_email, [novo_email], fail_silently=True)
+                    send_mail(
+                        subject='SGOM: Credenciais de acesso',
+                        message=(
+                            f"Olá {cliente.nome}, suas credenciais foram criadas.\n"
+                            f"Usuário: {username}\nSenha: {password}"
+                        ),
+                        from_email='no-reply@sgom.local',
+                        recipient_list=[novo_email],
+                        fail_silently=True,
+                    )
                 except Exception:
                     pass
         else:
-            messages.error(request, 'Selecione um cliente existente ou informe os dados para cadastro rápido.')
+            messages.error(request, 'Informe os dados do cliente ou selecione um cliente existente.')
 
-    # Se já temos um cliente, tentar criar o veículo
-    context = { 'clientes': Cliente.objects.all().order_by('nome') }
-    if cliente:
-        data = {
-            'placa': placa,
-            'modelo': modelo,
-            'marca': marca,
-            'ano': ano,
-            'cliente': cliente.id_cliente,
+    # Persistir veículo via serializer
+    data = {
+        'placa': placa,
+        'modelo': modelo,
+        'marca': marca,
+        'ano': ano,
+        'cliente': cliente.id_cliente if cliente else None,
+    }
+    serializer = VeiculoSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save()
+        messages.success(request, 'Veículo cadastrado com sucesso!')
+        clientes = Cliente.objects.all().order_by('nome')
+        context = {
+            'clientes': clientes,
+            'form_data': {},
         }
-        serializer = VeiculoSerializer(data=data)
-        if serializer.is_valid():
-            veiculo = serializer.save()
-            messages.success(request, 'Veículo cadastrado com sucesso!')
-            return redirect('cadastrar_veiculo')
-        else:
-            # Exibir erros no formulário
-            context['errors'] = serializer.errors
-            context['form_data'] = data
+        return render(request, 'veiculos/cadastrar_veiculo.html', context)
     else:
-        # Repopular dados do formulário caso erro
-        context['form_data'] = {
-            'placa': placa,
-            'modelo': modelo,
-            'marca': marca,
-            'ano': ano,
-            'cliente': cliente_id,
-            'novo_nome': novo_nome,
-            'novo_cpf': novo_cpf,
-            'novo_email': novo_email,
-            'novo_telefone': novo_telefone,
-            'novo_endereco': novo_endereco,
+        clientes = Cliente.objects.all().order_by('nome')
+        context = {
+            'clientes': clientes,
+            'errors': serializer.errors,
+            'form_data': data,
         }
+        return render(request, 'veiculos/cadastrar_veiculo.html', context)
 
-    return render(request, 'veiculos/cadastrar_veiculo.html', context)
+
+@api_view(['GET'])
+def agenda_mecanico(request):
+    # Lista os agendamentos futuros do mecânico autenticado (se houver), senão lista todos
+    qs = Agendamento.objects.filter(horario_inicio__gte=timezone.now()).order_by('horario_inicio')
+    if request.user and hasattr(request.user, 'mecanico'):
+        qs = qs.filter(mecanico=request.user.mecanico)
+    serializer = AgendamentoSerializer(qs, many=True)
+    return render(request, 'veiculos/agenda.html', { 'agendamentos': serializer.data })

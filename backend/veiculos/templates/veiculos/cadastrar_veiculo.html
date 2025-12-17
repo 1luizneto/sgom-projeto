@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadastro de Novo Veículo - SGOM</title>
+  <style>
+    :root { --primary: #2563eb; --bg: #0b1020; --card: #111827; --muted: #9ca3af; --danger: #dc2626; --success: #16a34a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif; background: linear-gradient(180deg, #0b1020 0%, #0f172a 100%); color: #e5e7eb; }
+    header { position: sticky; top: 0; backdrop-filter: blur(6px); background: rgba(17, 24, 39, 0.7); border-bottom: 1px solid rgba(255,255,255,0.08); }
+    nav { display: flex; align-items: center; justify-content: space-between; max-width: 980px; margin: 0 auto; padding: 14px 16px; }
+    nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #fff; }
+    nav a { color: #e5e7eb; text-decoration: none; margin-left: 16px; font-size: 14px; }
+    nav a.cta { background: var(--primary); color: white; padding: 8px 12px; border-radius: 8px; font-weight: 600; }
+    main { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    .card { background: var(--card); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    h1 { font-size: 22px; margin: 12px 0 18px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 13px; color: var(--muted); }
+    .field input, .field select, .field textarea { background: #0b1324; border: 1px solid rgba(255,255,255,0.1); color: #e5e7eb; border-radius: 10px; padding: 10px 12px; outline: none; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.25); }
+    .section-title { margin-top: 8px; margin-bottom: 8px; font-size: 16px; font-weight: 700; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .seg { margin-top: 18px; padding-top: 16px; border-top: 1px dashed rgba(255,255,255,0.1); }
+    .radio-row { display: flex; gap: 18px; align-items: center; margin: 6px 0 10px; }
+    .actions { display: flex; gap: 10px; margin-top: 18px; }
+    button { background: var(--primary); color: white; border: none; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #334155; }
+    .alert { border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+    .alert.error { background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.35); color: #fecaca; }
+    .alert.success { background: rgba(22, 163, 74, 0.12); border: 1px solid rgba(22, 163, 74, 0.35); color: #bbf7d0; }
+    .errors-list { margin: 8px 0 0; padding-left: 18px; }
+    .errors-list li { font-size: 13px; color: #fecaca; }
+    footer { max-width: 980px; margin: 18px auto 32px; padding: 0 16px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="brand">
+        <span>SGOM</span>
+        <span class="muted">Sistema de Gestão de Oficina Mecânica</span>
+      </div>
+      <div>
+        <a href="/veiculos/cadastrar/" class="cta">Cadastro de Novo Veículo</a>
+        <a href="/api/veiculos">API Veículos</a>
+        <a href="/api/clientes">API Clientes</a>
+        <a href="/admin/">Admin</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <div class="card">
+      <h1>Cadastro de Novo Veículo</h1>
+      <p class="muted">Preencha os dados do veículo e vincule a um cliente existente ou cadastre rapidamente um novo cliente.</p>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert {% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% if errors %}
+        <div class="alert error">
+          Ocorreram erros ao validar os dados. Corrija e tente novamente.
+          <ul class="errors-list">
+            {% for field, msgs in errors.items %}
+              <li><strong>{{ field|title }}</strong>: {{ msgs|join:", " }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <form method="post" action="">
+        {% csrf_token %}
+
+        <div class="section-title">Dados do veículo</div>
+        <div class="grid">
+          <div class="field">
+            <label for="placa">Placa</label>
+            <input type="text" id="placa" name="placa" placeholder="ABC-1234" value="{{ form_data.placa|default:'' }}" required />
+          </div>
+          <div class="field">
+            <label for="modelo">Modelo</label>
+            <input type="text" id="modelo" name="modelo" placeholder="Ex: Onix, HB20" value="{{ form_data.modelo|default:'' }}" required />
+          </div>
+          <div class="field">
+            <label for="marca">Marca</label>
+            <input type="text" id="marca" name="marca" placeholder="Ex: Chevrolet, Hyundai" value="{{ form_data.marca|default:'' }}" required />
+          </div>
+          <div class="field">
+            <label for="ano">Ano</label>
+            <input type="number" min="1950" max="2100" id="ano" name="ano" placeholder="Ex: 2020" value="{{ form_data.ano|default:'' }}" required />
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="section-title">Vincular Cliente</div>
+          <div class="radio-row">
+            <label><input type="radio" name="cliente_mode" value="existente" checked /> Cliente existente</label>
+            <label><input type="radio" name="cliente_mode" value="novo" /> Cadastro rápido de novo cliente</label>
+          </div>
+
+          <div id="cliente_existente">
+            <div class="field">
+              <label for="cliente">Selecione o cliente</label>
+              <select id="cliente" name="cliente">
+                <option value="">-- selecione --</option>
+                {% for c in clientes %}
+                  <option value="{{ c.id_cliente }}" {% if form_data.cliente == c.id_cliente|stringformat:"s" %}selected{% endif %}>{{ c.nome }} ({{ c.cpf }})</option>
+                {% endfor %}
+              </select>
+              <p class="muted">Dica: comece digitando para localizar rapidamente.</p>
+            </div>
+          </div>
+
+          <div id="cliente_novo" style="display: none;">
+            <div class="grid">
+              <div class="field">
+                <label for="novo_nome">Nome</label>
+                <input type="text" id="novo_nome" name="novo_nome" value="{{ form_data.novo_nome|default:'' }}" />
+              </div>
+              <div class="field">
+                <label for="novo_cpf">CPF</label>
+                <input type="text" id="novo_cpf" name="novo_cpf" value="{{ form_data.novo_cpf|default:'' }}" />
+              </div>
+              <div class="field">
+                <label for="novo_email">Email (opcional)</label>
+                <input type="email" id="novo_email" name="novo_email" value="{{ form_data.novo_email|default:'' }}" />
+              </div>
+              <div class="field">
+                <label for="novo_telefone">Telefone</label>
+                <input type="text" id="novo_telefone" name="novo_telefone" value="{{ form_data.novo_telefone|default:'' }}" />
+              </div>
+              <div class="field" style="grid-column: 1 / -1;">
+                <label for="novo_endereco">Endereço</label>
+                <textarea id="novo_endereco" name="novo_endereco" rows="3">{{ form_data.novo_endereco|default:'' }}</textarea>
+              </div>
+            </div>
+            <p class="muted">Ao informar os dados, o sistema criará automaticamente um usuário de acesso para o cliente e enviará as credenciais por email (se fornecido).</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit">Cadastrar veículo</button>
+          <button type="reset" class="secondary" id="resetBtn">Limpar</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer>
+    © {{ now|date:"Y" }} SGOM - Projeto acadêmico.
+  </footer>
+
+  <script>
+    const radios = document.querySelectorAll('input[name="cliente_mode"]');
+    const secExistente = document.getElementById('cliente_existente');
+    const secNovo = document.getElementById('cliente_novo');
+    function updateMode() {
+      const v = document.querySelector('input[name="cliente_mode"]:checked').value;
+      if (v === 'existente') { secExistente.style.display = 'block'; secNovo.style.display = 'none'; }
+      else { secExistente.style.display = 'none'; secNovo.style.display = 'block'; }
+    }
+    radios.forEach(r => r.addEventListener('change', updateMode));
+    updateMode();
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      setTimeout(() => { updateMode(); }, 0);
+    });
+  </script>
+</body>
+</html>

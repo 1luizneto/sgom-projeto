@@ -15,16 +15,17 @@ class Cliente(models.Model):
 
 class Mecanico(models.Model):
     id_mecanico = models.AutoField(primary_key=True)
-    # Futuramente podes vincular ao User do Django aqui
     nome = models.CharField(max_length=255)
     cpf = models.CharField(max_length=14, unique=True)
     telefone = models.CharField(max_length=20)
     email = models.EmailField()
-    endereco = models.TextField()
-    #teste
+    endereco = models.TextField(blank=True, null=True)
+
+    is_mecanico = models.BooleanField(default=True)
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='mecanico', null=True, blank=True)
 
     def __str__(self):
-        return self.nome
+        return f"{self.nome} ({self.cpf})"
 
 class Fornecedor(models.Model):
     id_fornecedor = models.AutoField(primary_key=True)

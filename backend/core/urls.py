@@ -29,6 +29,7 @@ router.register(r'agendamentos', AgendamentoViewSet, basename='agendamento')
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path('api/', include('oficina.urls')),
     # UI PB04 veículo
     path('veiculos/cadastrar/', cadastrar_veiculo, name='cadastrar_veiculo'),
     path('agenda/', agenda_mecanico, name='agenda_mecanico'),

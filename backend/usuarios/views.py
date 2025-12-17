@@ -4,37 +4,26 @@ from django.utils.crypto import get_random_string
 from .forms import MecanicoForm
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.permissions import IsAdminUser
 from .models import Mecanico
 from .serializers import MecanicoSerializer
+
 
 def cadastrar_mecanico(request):
     if request.method == 'POST':
         form = MecanicoForm(request.POST)
         if form.is_valid():
-            mecanico = form.save(commit=False)
-            # Gera uma senha aleatória para o mecânico
-            mecanico.usuario = mecanico.email.split('@')[0]  # Exemplo simples de usuário baseado no email
-            senha_aleatoria = get_random_string(length=8)
-            # Aqui você pode adicionar lógica para enviar a senha por email, se necessário
-            mecanico.senha = senha_aleatoria
-            mecanico.save()
-
-            print(f"Senha gerada para o mecânico {mecanico.nome}: User: {mecanico.usuario} | Senha: {senha_aleatoria}")
-
-            return redirect('lista_mecanicos')  # Redireciona para a lista de mecânicos após o cadastro
-            # Mantido apenas como exemplo legacy; o fluxo oficial usa API DRF
             mecanico = form.save()
             return redirect('/')
     else:
         form = MecanicoForm()
-    
     return render(request, 'usuarios/cadastrar_mecanico.html', {'form': form})
-
 
 
 class MecanicoViewSet(viewsets.ModelViewSet):
     queryset = Mecanico.objects.all()
     serializer_class = MecanicoSerializer
+    permission_classes = [IsAdminUser]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

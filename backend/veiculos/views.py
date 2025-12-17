@@ -1,18 +1,15 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.decorators import api_view
 from django.shortcuts import render
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.contrib.auth.models import User
 from django.utils import timezone
 from .models import Agendamento
-from .serializers import AgendamentoSerializer
-
-from rest_framework.decorators import api_view
-
+from .serializers import VeiculoSerializer, AgendamentoSerializer, ServicoSerializer
 from .models import Veiculo, Agendamento, Servico
-from .serializers import VeiculoSerializer, AgendamentoSerializer
 from usuarios.models import Cliente, Mecanico
 from django.utils import timezone
 from datetime import datetime
@@ -56,6 +53,14 @@ class AgendamentoViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(ser.data)
         ser = self.get_serializer(qs, many=True)
         return Response(ser.data)
+
+class ServicoViewSet(viewsets.ModelViewSet):
+    """
+    PB06 - CRUD de Serviços e Mão de Obra.
+    Permite listar, criar, editar e excluir tipos de serviços.
+    """
+    queryset = Servico.objects.all()
+    serializer_class = ServicoSerializer
 
 # UI PB04 existente
 # Remover exigência de login para permitir pré-visualização da UI
@@ -176,5 +181,6 @@ def agenda_mecanico(request):
     if request.user and hasattr(request.user, 'mecanico'):
         qs = qs.filter(mecanico=request.user.mecanico)
     serializer = AgendamentoSerializer(qs, many=True)
+
     context = { 'agendamentos': serializer.data, **context_extra }
     return render(request, 'veiculos/agenda.html', context)

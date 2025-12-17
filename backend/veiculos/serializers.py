@@ -136,3 +136,24 @@ class AgendamentoSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # permite camada superior definir mecanico a partir do request, mas mantém create padrão
         return super().create(validated_data)
+    
+class ServicoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Servico
+        fields = ['id_servico', 'descricao', 'preco_base', 'detalhes_padrao']
+
+    def validate_preco_base(self, value):
+        """
+        Validação específica para o campo preço (Cenário 3)
+        """
+        if value <= 0:
+            raise serializers.ValidationError("O preço deve ser maior que zero.")
+        return value
+    
+    def validate_descricao(self, value):
+        """
+        Validação para descrição vazia (Cenário 3)
+        """
+        if not value or value.strip() == "":
+            raise serializers.ValidationError("A descrição do serviço é obrigatória.")
+        return value

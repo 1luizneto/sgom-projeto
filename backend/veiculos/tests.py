@@ -1,8 +1,12 @@
 from rest_framework.test import APITestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
-from usuarios.models import Cliente
-from veiculos.models import Veiculo
+from django.utils import timezone
+from datetime import timedelta
+from django.test import override_settings
+from django.core import mail
+from usuarios.models import Cliente, Mecanico
+from veiculos.models import Veiculo, Servico, Agendamento
 
 class PB04VeiculosTests(APITestCase):
     def setUp(self):

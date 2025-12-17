@@ -50,7 +50,7 @@
         <div class="list">
           {% for a in agendamentos %}
             <div class="item">
-              <div class="when">{{ a.horario_inicio }}</div>
+              <div class="when">Início: {{ a.horario_inicio }}{% if a.horario_fim %} · Fim: {{ a.horario_fim }}{% endif %}</div>
               <div>
                 <div class="who">{{ a.cliente_nome }}</div>
                 <div class="service">Serviço: {{ a.servico_descricao }}</div>
@@ -60,7 +60,7 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="muted">Nenhum agendamento futuro encontrado.</p>
+        <p class="muted">Nenhum agendamento encontrado para este período</p>
       {% endif %}
     </div>
   </main>

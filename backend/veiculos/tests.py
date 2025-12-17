@@ -47,7 +47,7 @@ class PB04VeiculosTests(APITestCase):
         resp = self.client.post(self.url_list, payload, format='json')
         self.assertEqual(resp.status_code, 400)
         self.assertIn('cliente', resp.data)
-        self.assertIn('This field is required.', resp.data['cliente'][0])
+        self.assertIn('Este campo é obrigatório.', resp.data['cliente'][0])
 
     def test_crud_veiculo(self):
         # Create

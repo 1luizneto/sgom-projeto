@@ -1,7 +1,10 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Orcamento, ItemMovimentacao
+from django.utils import timezone
+
+# Importação explícita de todos os modelos necessários
+from .models import Orcamento, ItemMovimentacao, OrdemServico 
 from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
@@ -41,6 +44,64 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
         # enviar_email_cliente(orcamento)
         
         return Response({"mensagem": "Orçamento finalizado e notificação enviada."}, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'])
+    def aprovar(self, request, pk=None):
+        """
+        PB09 - Aprova o orçamento e gera a Ordem de Serviço (OS).
+        """
+        orcamento = self.get_object()
+
+        # Validação: Cenário 3 (Já processado)
+        if orcamento.status in ['APROVADO', 'REJEITADO']:
+            return Response(
+                {"erro": "Este orçamento já foi processado anteriormente."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Atualiza Status
+        orcamento.status = 'APROVADO'
+        orcamento.save()
+
+        # Geração da OS (Cenário 1)
+        # Gera um número de OS simples: OS-{ANO}-{ID_ORCAMENTO}
+        ano_atual = timezone.now().year
+        numero_os_gerado = f"OS-{ano_atual}-{orcamento.pk}"
+
+        # Criação da OS usando o modelo importado
+        OrdemServico.objects.create(
+            numero_os=numero_os_gerado,
+            orcamento=orcamento,
+            veiculo=orcamento.veiculo,
+            mecanico_responsavel=orcamento.mecanico,
+            status='EM_ANDAMENTO'
+        )
+
+        # Notificação (Simulada conforme requisito)
+        # notificar_mecanico(orcamento.mecanico, "Nova OS aberta!")
+
+        return Response({"mensagem": "Orçamento aprovado e OS gerada com sucesso."}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def rejeitar(self, request, pk=None):
+        """
+        PB09 - Rejeita o orçamento e encerra o fluxo.
+        """
+        orcamento = self.get_object()
+
+        # Validação: Cenário 3 (Já processado)
+        if orcamento.status in ['APROVADO', 'REJEITADO']:
+            return Response(
+                {"erro": "Este orçamento já foi processado anteriormente."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Atualiza Status
+        orcamento.status = 'REJEITADO'
+        # Opcional: Salvar motivo se houver campo no model (request.data.get('motivo'))
+        orcamento.save()
+
+        return Response({"mensagem": "Orçamento rejeitado."}, status=status.HTTP_200_OK)
 
 class ItemMovimentacaoViewSet(viewsets.ModelViewSet):
     queryset = ItemMovimentacao.objects.all()

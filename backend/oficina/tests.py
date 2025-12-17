@@ -151,3 +151,49 @@ class OrcamentoModelTest(TestCase):
         )
 
         self.assertEqual(item.subtotal, Decimal('300.00'))
+
+class OrdemServicoModelTest(TestCase):
+    def setUp(self):
+        # Configuração básica para o teste unitário
+        self.user = User.objects.create_user(username='mecanico_os', password='123')
+        self.mecanico = Mecanico.objects.create(user=self.user)
+        self.cliente = Cliente.objects.create(nome="Cliente OS", cpf="12345678900")
+        self.veiculo = Veiculo.objects.create(placa="OS-9999", modelo="Fiat Uno", ano=2015, cliente=self.cliente)
+        
+        self.orcamento = Orcamento.objects.create(
+            cliente=self.cliente,
+            veiculo=self.veiculo,
+            mecanico=self.mecanico,
+            validade=timezone.now().date(),
+            status='APROVADO'
+        )
+
+    def test_criacao_os_basica(self):
+        """
+        Teste Unitário: Verifica se conseguimos criar uma OS diretamente no banco
+        sem passar pela API.
+        """
+        os = OrdemServico.objects.create(
+            numero_os="OS-2025-TESTE",
+            orcamento=self.orcamento,
+            veiculo=self.veiculo,
+            mecanico_responsavel=self.mecanico,
+            status='EM_ANDAMENTO'
+        )
+
+        self.assertEqual(os.numero_os, "OS-2025-TESTE")
+        self.assertEqual(os.status, "EM_ANDAMENTO")
+        self.assertEqual(os.veiculo.placa, "OS-9999")
+
+    def test_str_representation(self):
+        """
+        Teste Unitário: Verifica se o método __str__ retorna o formato esperado.
+        """
+        os = OrdemServico.objects.create(
+            numero_os="OS-999",
+            orcamento=self.orcamento,
+            veiculo=self.veiculo,
+            mecanico_responsavel=self.mecanico
+        )
+        # O esperado é "OS #OS-999" conforme definido no models.py
+        self.assertEqual(str(os), "OS #OS-999")

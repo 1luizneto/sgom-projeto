@@ -26,4 +26,5 @@ router.register(r'mecanicos', MecanicoViewSet, basename='mecanico')
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path('api/', include('oficina.urls')),
 ]

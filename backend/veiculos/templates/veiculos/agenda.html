@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agenda | SGOM</title>
+  <style>
+    :root { --bg: #0f172a; --card: #111827; --primary: #2563eb; --muted: #94a3b8; }
+    body { background: var(--bg); color: #e5e7eb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; margin: 0; }
+    header { background: #0b1324; padding: 14px 0; }
+    nav { max-width: 980px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; }
+    nav .brand { display: flex; gap: 12px; align-items: baseline; }
+    nav .brand span:first-child { font-weight: 800; font-size: 18px; }
+    nav a { color: #93c5fd; text-decoration: none; margin-left: 12px; }
+    nav a.cta { background: #1e293b; padding: 8px 12px; border-radius: 12px; }
+    main { max-width: 980px; margin: 22px auto; padding: 0 16px; }
+    .card { background: var(--card); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 18px; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    .muted { color: var(--muted); }
+    .list { margin-top: 16px; }
+    .item { display: grid; grid-template-columns: 180px 1fr 140px; gap: 12px; align-items: center; padding: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
+    .item + .item { margin-top: 10px; }
+    .when { color: #bfdbfe; font-weight: 700; }
+    .who { font-weight: 600; }
+    .service { color: #93c5fd; }
+    .vehicle { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <div class="brand">
+        <span>SGOM</span>
+        <span class="muted">Sistema de Gestão de Oficina Mecânica</span>
+      </div>
+      <div>
+        <a href="/agenda" class="cta">Agenda</a>
+        <a href="/veiculos/cadastrar/">Cadastro de Veículos</a>
+        <a href="/api/agendamentos">API Agendamentos</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <div class="card">
+      <h1>Agenda de Agendamentos Futuros</h1>
+      <p class="muted">Lista cronológica dos próximos atendimentos. Exibe cliente, horário e detalhes do serviço e veículo.</p>
+
+      {% if agendamentos and agendamentos|length > 0 %}
+        <div class="list">
+          {% for a in agendamentos %}
+            <div class="item">
+              <div class="when">{{ a.horario_inicio }}</div>
+              <div>
+                <div class="who">{{ a.cliente_nome }}</div>
+                <div class="service">Serviço: {{ a.servico_descricao }}</div>
+              </div>
+              <div class="vehicle">{{ a.veiculo_placa }} · {{ a.veiculo_modelo }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">Nenhum agendamento futuro encontrado.</p>
+      {% endif %}
+    </div>
+  </main>
+</body>
+</html>

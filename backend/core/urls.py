@@ -18,15 +18,18 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from usuarios.views import MecanicoViewSet, ClienteViewSet
-from veiculos.views import VeiculoViewSet, AgendamentoViewSet, cadastrar_veiculo, agenda_mecanico
+from veiculos.views import VeiculoViewSet, AgendamentoViewSet, ServicoViewSet,cadastrar_veiculo, agenda_mecanico
+from django.views.generic import RedirectView
 
 router = DefaultRouter()
 router.register(r'mecanicos', MecanicoViewSet, basename='mecanico')
 router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'veiculos', VeiculoViewSet, basename='veiculo')
 router.register(r'agendamentos', AgendamentoViewSet, basename='agendamento')
+router.register(r'servicos', ServicoViewSet, basename='servico')
 
 urlpatterns = [
+    path('', RedirectView.as_view(url='/api/', permanent=False)), 
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/', include('oficina.urls')),

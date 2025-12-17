@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+from usuarios.models import Cliente
 
 class Veiculo(models.Model):
     id_veiculo = models.AutoField(primary_key=True)
@@ -18,8 +20,14 @@ class Servico(models.Model):
     descricao = models.CharField(max_length=255)
     preco_base = models.DecimalField(max_digits=10, decimal_places=2)
 
+    detalhes_padrao = models.TextField(blank=True, null=True, verbose_name="Detalhamento Padrão")
+
     def __str__(self):
         return self.descricao
+    
+    def clean(self):
+        if self.preco_base < 0:
+            raise ValidationError("O preço do serviço não pode ser negativo.")
 
 # PB01: Agendamento de serviços
 class Agendamento(models.Model):

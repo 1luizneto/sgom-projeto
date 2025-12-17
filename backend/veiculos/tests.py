@@ -3,6 +3,9 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from usuarios.models import Cliente
 from veiculos.models import Veiculo
+from django.test import TestCase
+from django.core.exceptions import ValidationError
+from .models import Servico
 
 class PB04VeiculosTests(APITestCase):
     def setUp(self):
@@ -41,7 +44,7 @@ class PB04VeiculosTests(APITestCase):
         resp = self.client.post(self.url_list, payload, format='json')
         self.assertEqual(resp.status_code, 400)
         self.assertIn('cliente', resp.data)
-        self.assertIn('Este campo é obrigatório.', resp.data['cliente'][0])
+        self.assertIn('This field is required.', resp.data['cliente'][0])
 
     def test_crud_veiculo(self):
         # Create
@@ -84,3 +87,38 @@ class PB04VeiculosTests(APITestCase):
         delete_resp = self.client.delete(url_detail)
         self.assertEqual(delete_resp.status_code, 204)
         self.assertFalse(Veiculo.objects.filter(id_veiculo=veiculo_id).exists())
+
+class ServicoModelTest(TestCase):
+    def test_criacao_servico_valido(self):
+        """
+        Teste Unitário: Verifica se um serviço é salvo corretamente com dados válidos.
+        """
+        servico = Servico.objects.create(
+            descricao="Troca de Pastilha",
+            preco_base=250.00,
+            detalhes_padrao="Inclui retífica dos discos"
+        )
+        self.assertEqual(servico.descricao, "Troca de Pastilha")
+        self.assertEqual(servico.preco_base, 250.00)
+        self.assertIsNotNone(servico.id_servico)
+
+    def test_str_representation(self):
+        """
+        Teste Unitário: Verifica se o __str__ retorna a descrição do serviço.
+        """
+        servico = Servico(descricao="Alinhamento 3D", preco_base=100.00)
+        self.assertEqual(str(servico), "Alinhamento 3D")
+
+    def test_preco_negativo_nao_permitido(self):
+        """
+        Teste Unitário: Verifica se o método clean() impede preços negativos.
+        Nota: No Django, .save() não chama .full_clean() automaticamente,
+        por isso chamamos explicitamente no teste.
+        """
+        servico = Servico(
+            descricao="Serviço Inválido",
+            preco_base=-50.00  # Preço negativo
+        )
+        
+        with self.assertRaises(ValidationError):
+            servico.full_clean() # Isso dispara o método clean()

@@ -10,7 +10,7 @@ class VeiculoSerializer(serializers.ModelSerializer):
         max_length=10,
         validators=[UniqueValidator(queryset=Veiculo.objects.all(), message="Placa já cadastrada")]
     )
-    cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all(), required=True)
+    cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all(), required=True, error_messages={'required': 'Este campo é obrigatório.'})
 
     class Meta:
         model = Veiculo

@@ -1,11 +1,14 @@
 from rest_framework.test import APITestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
-from usuarios.models import Cliente
-from veiculos.models import Veiculo
+from usuarios.models import Cliente, Mecanico
+from veiculos.models import Veiculo, Servico, Agendamento
 from django.test import TestCase
 from django.core.exceptions import ValidationError
-from .models import Servico
+from django.utils import timezone
+from datetime import timedelta
+from django.test import override_settings
+from django.core import mail
 
 class PB04VeiculosTests(APITestCase):
     def setUp(self):

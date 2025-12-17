@@ -11,6 +11,8 @@ from .models import Agendamento
 from .serializers import VeiculoSerializer, AgendamentoSerializer, ServicoSerializer
 from .models import Veiculo, Agendamento, Servico
 from usuarios.models import Cliente, Mecanico
+from django.utils import timezone
+from datetime import datetime
 
 class VeiculoViewSet(viewsets.ModelViewSet):
     queryset = Veiculo.objects.all()
@@ -76,6 +78,7 @@ def cadastrar_veiculo(request):
 
     cliente_id = request.POST.get('cliente')
     cliente = None
+    novo_cliente_criado = False
 
     # Dados de cadastro rápido de cliente
     novo_nome = request.POST.get('novo_nome', '').strip()
@@ -110,6 +113,7 @@ def cadastrar_veiculo(request):
                 endereco=novo_endereco,
                 user=user,
             )
+            novo_cliente_criado = True
             if novo_email:
                 try:
                     send_mail(
@@ -125,7 +129,7 @@ def cadastrar_veiculo(request):
                 except Exception:
                     pass
         else:
-            messages.error(request, 'Informe os dados do cliente ou selecione um cliente existente.')
+            messages.error(request, 'É obrigatório vincular o veículo a um cliente (existente ou novo)')
 
     # Persistir veículo via serializer
     data = {
@@ -138,7 +142,11 @@ def cadastrar_veiculo(request):
     serializer = VeiculoSerializer(data=data)
     if serializer.is_valid():
         serializer.save()
-        messages.success(request, 'Veículo cadastrado com sucesso!')
+        # Mensagens de sucesso conforme cenário
+        if novo_cliente_criado:
+            messages.success(request, 'Cliente e Veículo cadastrados com sucesso')
+        else:
+            messages.success(request, 'Veículo cadastrado com sucesso')
         clientes = Cliente.objects.all().order_by('nome')
         context = {
             'clientes': clientes,
@@ -157,10 +165,22 @@ def cadastrar_veiculo(request):
 
 @api_view(['GET'])
 def agenda_mecanico(request):
-    # Lista os agendamentos futuros do mecânico autenticado (se houver), senão lista todos
-    qs = Agendamento.objects.filter(horario_inicio__gte=timezone.now()).order_by('horario_inicio')
+    data_str = request.GET.get('data')
+    context_extra = {}
+    if data_str:
+        try:
+            selected_date = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            selected_date = timezone.localdate()
+        qs = Agendamento.objects.filter(horario_inicio__date=selected_date)
+        context_extra['selected_date'] = selected_date
+    else:
+        # Padrão: listar agendamentos futuros
+        qs = Agendamento.objects.filter(horario_inicio__gte=timezone.now())
+    qs = qs.order_by('horario_inicio')
     if request.user and hasattr(request.user, 'mecanico'):
         qs = qs.filter(mecanico=request.user.mecanico)
     serializer = AgendamentoSerializer(qs, many=True)
-    return render(request, 'veiculos/agenda.html', { 'agendamentos': serializer.data })
 
+    context = { 'agendamentos': serializer.data, **context_extra }
+    return render(request, 'veiculos/agenda.html', context)

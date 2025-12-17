@@ -5,18 +5,48 @@ from .models import Mecanico
 class MecanicoSerializer(serializers.ModelSerializer):
     cpf = serializers.CharField(
         max_length=14,
-        validators=[UniqueValidator(queryset=Mecanico.objects.all(), message="CPF já cadastrado.")]
+        validators=[UniqueValidator(queryset=Mecanico.objects.all(), message="CPF já vinculado a outro funcionário")]
     )
 
     class Meta:
         model = Mecanico
         fields = ['id_mecanico', 'nome', 'cpf', 'telefone', 'email', 'endereco']
         extra_kwargs = {
-            'nome': {'required': True},
-            'cpf': {'required': True},
-            'telefone': {'required': True},
-            'email': {'required': True},
-            'endereco': {'required': True},
+            'nome': {
+                'required': True,
+                'error_messages': {
+                    'blank': 'Este campo é obrigatório.',
+                    'required': 'Este campo é obrigatório.',
+                }
+            },
+            'cpf': {
+                'required': True,
+                'error_messages': {
+                    'blank': 'Este campo é obrigatório.',
+                    'required': 'Este campo é obrigatório.',
+                }
+            },
+            'telefone': {
+                'required': True,
+                'error_messages': {
+                    'blank': 'Este campo é obrigatório.',
+                    'required': 'Este campo é obrigatório.',
+                }
+            },
+            'email': {
+                'required': True,
+                'error_messages': {
+                    'blank': 'Este campo é obrigatório.',
+                    'required': 'Este campo é obrigatório.',
+                }
+            },
+            'endereco': {
+                'required': True,
+                'error_messages': {
+                    'blank': 'Este campo é obrigatório.',
+                    'required': 'Este campo é obrigatório.',
+                }
+            },
         }
 
     def validate(self, attrs):

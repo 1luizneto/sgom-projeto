@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.models import User
 from django.utils.crypto import get_random_string
+from django.core.mail import send_mail
+from django.conf import settings
 from .forms import MecanicoForm
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -45,8 +47,25 @@ class MecanicoViewSet(viewsets.ModelViewSet):
 
         mecanico = Mecanico.objects.create(user=user, **serializer.validated_data)
 
+        # Enviar credenciais por email conforme requisito pb19
+        subject = 'Credenciais de acesso - SGOM'
+        message = (
+            f"Olá {nome},\n\n"
+            f"Seu acesso foi criado.\n"
+            f"Login: {username}\n"
+            f"Senha provisória: {password}\n\n"
+            f"Por favor, altere sua senha no primeiro acesso."
+        )
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sgom.local')
+        try:
+            send_mail(subject, message, from_email, [email], fail_silently=True)
+        except Exception:
+            # Não falhar o cadastro caso o envio de email não esteja configurado
+            pass
+
         data = MecanicoSerializer(mecanico).data
         data['credenciais'] = { 'username': username, 'password': password }
+        data['message'] = 'Mecânico cadastrado com sucesso'
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 

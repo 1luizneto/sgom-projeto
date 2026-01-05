@@ -97,3 +97,27 @@ class LaudoTecnico(models.Model):
     os = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='laudo')
     diagnostico_detalhado = models.TextField()
     recomendacoes_futuras = models.TextField()
+
+# --- Venda Balcão ---
+class Venda(models.Model):
+    id_venda = models.AutoField(primary_key=True)
+    data_venda = models.DateTimeField(auto_now_add=True)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    def __str__(self):
+        return f"Venda #{self.id_venda} - {self.data_venda.strftime('%d/%m/%Y')}"
+
+class ItemVenda(models.Model):
+    id_item_venda = models.AutoField(primary_key=True)
+    venda = models.ForeignKey(Venda, on_delete=models.CASCADE, related_name='itens')
+    produto = models.ForeignKey(Produto, on_delete=models.PROTECT)
+    quantidade = models.IntegerField()
+    valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
+
+    def save(self, *args, **kwargs):
+        self.subtotal = self.quantidade * self.valor_unitario
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.quantidade}x {self.produto.nome} (Venda #{self.venda.id_venda})"

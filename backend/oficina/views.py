@@ -2,10 +2,11 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db import transaction
 
 # Importação explícita de todos os modelos necessários
-from .models import Orcamento, ItemMovimentacao, OrdemServico 
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer
+from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda
+from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
     queryset = Orcamento.objects.all()
@@ -106,3 +107,27 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
 class ItemMovimentacaoViewSet(viewsets.ModelViewSet):
     queryset = ItemMovimentacao.objects.all()
     serializer_class = ItemMovimentacaoSerializer
+
+class VendaViewSet(viewsets.ModelViewSet):
+    queryset = Venda.objects.all()
+    serializer_class = VendaSerializer
+
+    def create(self, request, *args, **kwargs):
+        """
+        Sobrescreve o create para garantir atomicidade.
+        Se ocorrer erro de estoque no Serializer, a transação é revertida.
+        """
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except Exception as e:
+            # Captura erro de validação do serializer ou outros erros
+            # Se for ValidationError do DRF, ele já tem a estrutura correta, 
+            # mas como estamos interceptando, precisamos garantir o retorno correto.
+            # O super().create chama serializer.is_valid(raise_exception=True) que lança ValidationError.
+            # Se o erro veio do método create() do serializer (nossa validação de estoque), 
+            # ele também sobe como exception.
+            
+            # Vamos deixar o DRF tratar o ValidationError padrão, mas precisamos garantir
+            # que a transaction faça rollback (o context manager faz isso automaticamente na exception).
+            raise e

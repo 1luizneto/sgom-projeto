@@ -109,8 +109,18 @@ class Checklist(models.Model):
 class LaudoTecnico(models.Model):
     id_laudo = models.AutoField(primary_key=True)
     os = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='laudo')
-    diagnostico_detalhado = models.TextField()
-    recomendacoes_futuras = models.TextField()
+    
+    # Detalhes do Laudo
+    diagnostico_detalhado = models.TextField() # Obrigatório
+    acoes_corretivas = models.TextField(blank=True, null=True) # O que foi feito
+    recomendacoes_futuras = models.TextField(blank=True, null=True)
+    
+    # Auditoria
+    data_conclusao = models.DateTimeField(default=timezone.now)
+    mecanico = models.ForeignKey('usuarios.Mecanico', on_delete=models.PROTECT, null=True) # Responsável pelo laudo
+
+    def __str__(self):
+        return f"Laudo Técnico - OS #{self.os.numero_os}"
 
 # --- Venda Balcão ---
 class Venda(models.Model):

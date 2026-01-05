@@ -5,8 +5,8 @@ from django.utils import timezone
 from django.db import transaction
 
 # Importação explícita de todos os modelos necessários
-from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer
+from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico
+from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
     queryset = Orcamento.objects.all()
@@ -146,3 +146,25 @@ class ChecklistViewSet(viewsets.ModelViewSet):
         if veiculo_id:
             queryset = queryset.filter(os__veiculo__id_veiculo=veiculo_id)
         return queryset
+
+class LaudoTecnicoViewSet(viewsets.ModelViewSet):
+    queryset = LaudoTecnico.objects.all()
+    serializer_class = LaudoTecnicoSerializer
+
+    def perform_create(self, serializer):
+        # Auto-atribui o mecânico logado, se houver, ou tenta pegar da requisição
+        # Como o auth pode não estar configurado completamente no teste, permitimos enviar 'mecanico' no body
+        # Mas se não enviado, tentamos pegar do user.
+        # No requisito: "exibir automaticamente o Nome do Mecânico responsável pela sua elaboração"
+        # Assumiremos que o frontend envia o ID ou o backend pega do user.
+        # Vamos manter simples: se enviado no serializer, usa. Se não, tenta user.
+        
+        mecanico = None
+        if self.request.user and self.request.user.is_authenticated:
+            if hasattr(self.request.user, 'mecanico'):
+                mecanico = self.request.user.mecanico
+        
+        if mecanico:
+            serializer.save(mecanico=mecanico)
+        else:
+            serializer.save()

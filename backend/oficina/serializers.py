@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist
+from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico
 from veiculos.models import Servico
 
 class ItemMovimentacaoSerializer(serializers.ModelSerializer):
@@ -29,6 +29,36 @@ class OrcamentoSerializer(serializers.ModelSerializer):
         Geralmente validamos isso na transição de status (ex: ao tentar 'Aprovar').
         """
         return data
+
+class LaudoTecnicoSerializer(serializers.ModelSerializer):
+    # Campos informativos da OS (peças usadas)
+    # Aqui assumimos que as peças usadas são os itens da OS (se houver) ou do Orçamento vinculado
+    # Vamos criar um campo ReadOnly para exibir as peças, caso existam na OS
+    pecas_utilizadas = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LaudoTecnico
+        fields = ['id_laudo', 'os', 'diagnostico_detalhado', 'acoes_corretivas', 'recomendacoes_futuras', 'data_conclusao', 'mecanico', 'pecas_utilizadas']
+        read_only_fields = ['data_conclusao']
+
+    def get_pecas_utilizadas(self, obj):
+        # Tenta pegar itens da OS ou do Orçamento da OS
+        itens = []
+        if hasattr(obj.os, 'itens') and obj.os.itens.exists():
+            itens = obj.os.itens.all()
+        elif obj.os.orcamento and obj.os.orcamento.itens.exists():
+            itens = obj.os.orcamento.itens.all()
+        
+        # Serializa os itens (nome do produto e quantidade)
+        return [
+            f"{item.quantidade}x {item.produto.nome if item.produto else 'Serviço'}" 
+            for item in itens if item.produto # Filtra apenas produtos (peças)
+        ]
+
+    def validate_diagnostico_detalhado(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("A descrição técnica do defeito é obrigatória para o laudo")
+        return value
 
 class ItemVendaSerializer(serializers.ModelSerializer):
     nome_produto = serializers.ReadOnlyField(source='produto.nome')

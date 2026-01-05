@@ -5,8 +5,8 @@ from django.utils import timezone
 from django.db import transaction
 
 # Importação explícita de todos os modelos necessários
-from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer
+from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist
+from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
     queryset = Orcamento.objects.all()
@@ -131,3 +131,18 @@ class VendaViewSet(viewsets.ModelViewSet):
             # Vamos deixar o DRF tratar o ValidationError padrão, mas precisamos garantir
             # que a transaction faça rollback (o context manager faz isso automaticamente na exception).
             raise e
+
+class ChecklistViewSet(viewsets.ModelViewSet):
+    queryset = Checklist.objects.all()
+    serializer_class = ChecklistSerializer
+    
+    def get_queryset(self):
+        """
+        Permite filtrar check lists por veículo (via OS).
+        Ex: /api/checklists/?veiculo_id=1
+        """
+        queryset = Checklist.objects.all()
+        veiculo_id = self.request.query_params.get('veiculo_id', None)
+        if veiculo_id:
+            queryset = queryset.filter(os__veiculo__id_veiculo=veiculo_id)
+        return queryset

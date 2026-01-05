@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda
+from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist
 from veiculos.models import Servico
 
 class ItemMovimentacaoSerializer(serializers.ModelSerializer):
@@ -77,3 +77,28 @@ class VendaSerializer(serializers.ModelSerializer):
         venda.save()
         
         return venda
+
+class ChecklistSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Checklist
+        fields = ['id_checklist', 'os', 'nivel_combustivel', 'avarias_lataria', 'pneus_estado', 'possivel_defeito', 'observacoes', 'data_criacao', 'mecanico']
+        read_only_fields = ['data_criacao']
+
+    def validate(self, data):
+        """
+        Valida regras de negócio do Checklist.
+        """
+        # Requisito: "É necessário informar o estado do veículo e o defeito relatado"
+        if not data.get('possivel_defeito'):
+             raise serializers.ValidationError({"possivel_defeito": "É necessário informar o defeito relatado."})
+        
+        # Validar estado do veículo (pelo menos um campo de estado deve estar preenchido?)
+        # O requisito diz: "Se a quantidade de um produto solicitada..." (não, isso é venda).
+        # "Scenario: Tentativa de salvar sem descrever o defeito"
+        # "But deixo o campo 'Possível Defeito' ou 'Estado Atual' em branco"
+        # Estado Atual = Nível Combustível + Avarias + Pneus.
+        
+        if not data.get('nivel_combustivel') and not data.get('avarias_lataria') and not data.get('pneus_estado'):
+             raise serializers.ValidationError("É necessário informar o estado atual do veículo (combustível, avarias ou pneus).")
+
+        return data

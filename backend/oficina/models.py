@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 # --- Produto (Estoque) ---
 class Produto(models.Model):
@@ -88,9 +89,22 @@ class ItemMovimentacao(models.Model):
 class Checklist(models.Model):
     id_checklist = models.AutoField(primary_key=True)
     os = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='checklist')
-    nivel_combustivel = models.CharField(max_length=50)
-    avarias_lataria = models.TextField(blank=True, null=True)
+    
+    # Estado Atual
+    nivel_combustivel = models.CharField(max_length=50) # Ex: 1/4, 1/2, Cheio
+    avarias_lataria = models.TextField(blank=True, null=True) # Mantendo nome legado, mapeado para Avarias Visuais
+    pneus_estado = models.CharField(max_length=100, default='Bom estado') # Novo
+    
+    # Diagnóstico Inicial
+    possivel_defeito = models.TextField(null=True, blank=True) # Obrigatório via serializer
     observacoes = models.TextField(blank=True, null=True)
+    
+    # Auditoria
+    data_criacao = models.DateTimeField(null=True, blank=True)
+    mecanico = models.ForeignKey('usuarios.Mecanico', on_delete=models.SET_NULL, null=True)
+
+    def __str__(self):
+        return f"Checklist OS #{self.os.numero_os}"
 
 class LaudoTecnico(models.Model):
     id_laudo = models.AutoField(primary_key=True)

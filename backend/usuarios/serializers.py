@@ -85,9 +85,15 @@ class ClienteSerializer(serializers.ModelSerializer):
         validators=[UniqueValidator(queryset=Cliente.objects.all(), message="CPF já vinculado a outro cliente")]
     )
 
+    password = serializers.CharField(
+        write_only=True, 
+        required=True, 
+        style={'input_type': 'password'}
+    )
+
     class Meta:
         model = Cliente
-        fields = ['id_cliente', 'nome', 'cpf', 'telefone', 'email', 'endereco']
+        fields = ['id_cliente', 'nome', 'cpf', 'telefone', 'email', 'endereco', 'password']
         extra_kwargs = {
             'nome': {
                 'required': True,

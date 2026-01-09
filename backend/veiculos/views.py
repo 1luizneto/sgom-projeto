@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from django.shortcuts import render
 from django.contrib import messages
 from django.core.mail import send_mail
@@ -61,6 +62,7 @@ class ServicoViewSet(viewsets.ModelViewSet):
     """
     queryset = Servico.objects.all()
     serializer_class = ServicoSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly] 
 
 # UI PB04 existente
 # Remover exigência de login para permitir pré-visualização da UI

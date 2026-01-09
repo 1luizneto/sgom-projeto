@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from .models import Mecanico, Cliente
 
@@ -138,3 +139,19 @@ class ClienteSerializer(serializers.ModelSerializer):
             if not attrs.get(field):
                 raise serializers.ValidationError({field: 'Este campo é obrigatório.'})
         return attrs
+    
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Removemos qualquer lógica complexa antes do super().validate()
+        # O authenticate() do Django (nosso arquivo authentication.py) será chamado aqui dentro
+        data = super().validate(attrs)
+        
+        # Adiciona dados extras no retorno (opcional, mas útil pro frontend)
+        data['username'] = self.user.username
+        data['email'] = self.user.email
+        
+        # Verifica se é mecânico
+        is_mecanico = hasattr(self.user, 'mecanico')
+        data['is_mecanico'] = is_mecanico
+        
+        return data

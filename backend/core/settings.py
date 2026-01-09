@@ -152,14 +152,16 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        # BasicAuth permite login simples (usuário/senha) se precisar
-        'rest_framework.authentication.BasicAuthentication', 
-        
-        # IMPORTANTE: Comente ou remova a SessionAuthentication abaixo
-        # 'rest_framework.authentication.SessionAuthentication', 
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         # Permite que qualquer um (inclusive anônimo) acesse os endpoints
         'rest_framework.permissions.AllowAny',
     ),
 }
+
+# Configuração para login via E-mail ou Username
+AUTHENTICATION_BACKENDS = [
+    'usuarios.authentication.EmailOrUsernameModelBackend', # Customizado
+    'django.contrib.auth.backends.ModelBackend',           # Padrão
+]

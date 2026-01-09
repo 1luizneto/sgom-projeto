@@ -30,6 +30,7 @@ class PB19CadastroMecanicosTests(APITestCase):
             'email': 'roberto.alves@oficina.com',
             'telefone': '(83) 99999-1111',
             'endereco': 'Rua das Oficinas, 10',
+            'password': 'senha_segura_123'
         }
 
         # When confirmo o cadastro
@@ -41,7 +42,10 @@ class PB19CadastroMecanicosTests(APITestCase):
         self.assertEqual(response.data['message'], 'Mecânico cadastrado com sucesso')
         self.assertIn('credenciais', response.data)
         self.assertIn('username', response.data['credenciais'])
-        self.assertIn('password', response.data['credenciais'])
+
+        mec = Mecanico.objects.get(cpf=cpf)
+        self.assertIsNotNone(mec.user)
+        self.assertTrue(mec.user.check_password('senha_segura_123')) # Verifica se a senha salva é a que enviamos
 
         # And o mecânico deve aparecer na lista de funcionários
         self.assertTrue(Mecanico.objects.filter(cpf=cpf, nome='Roberto Alves').exists())
@@ -55,7 +59,7 @@ class PB19CadastroMecanicosTests(APITestCase):
         email_sent = mail.outbox[0]
         self.assertIn('roberto.alves@oficina.com', email_sent.to)
         self.assertIn('Login:', email_sent.body)
-        self.assertIn('Senha provisória:', email_sent.body)
+        self.assertIn('Senha:', email_sent.body)
 
         # And o usuário de autenticação é criado e vinculado
         mecanico = Mecanico.objects.get(cpf=cpf)

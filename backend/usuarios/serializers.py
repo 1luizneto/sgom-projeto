@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
+from django.contrib.auth.models import User
 from .models import Mecanico, Cliente
 
 class MecanicoSerializer(serializers.ModelSerializer):
@@ -8,9 +9,11 @@ class MecanicoSerializer(serializers.ModelSerializer):
         validators=[UniqueValidator(queryset=Mecanico.objects.all(), message="CPF já vinculado a outro funcionário")]
     )
 
+    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+
     class Meta:
         model = Mecanico
-        fields = ['id_mecanico', 'nome', 'cpf', 'telefone', 'email', 'endereco']
+        fields = ['id_mecanico', 'nome', 'cpf', 'telefone', 'email', 'endereco', 'password']
         extra_kwargs = {
             'nome': {
                 'required': True,
@@ -56,6 +59,25 @@ class MecanicoSerializer(serializers.ModelSerializer):
             if not attrs.get(field):
                 raise serializers.ValidationError({field: 'Este campo é obrigatório.'})
         return attrs
+    
+    def create(self, validated_data):
+        # 1. Remove a senha dos dados (pois ela não vai para o model Mecanico)
+        password = validated_data.pop('password')
+        email = validated_data.get('email')
+        cpf = validated_data.get('cpf')
+
+        # 2. Cria o User do Django (para login)
+        # Usaremos o CPF ou Email como username para evitar duplicidade
+        user = User.objects.create_user(
+            username=cpf, # O Login será feito com o CPF
+            email=email,
+            password=password
+        )
+
+        # 3. Cria o Mecânico e vincula ao User
+        mecanico = Mecanico.objects.create(user=user, **validated_data)
+        
+        return mecanico
 
 class ClienteSerializer(serializers.ModelSerializer):
     cpf = serializers.CharField(

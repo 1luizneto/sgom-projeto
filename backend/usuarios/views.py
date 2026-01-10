@@ -151,3 +151,13 @@ class ClienteViewSet(viewsets.ModelViewSet):
         if user:
             user.delete()
         return response
+    
+    def get_queryset(self):
+        user = self.request.user
+        # Se for superuser, staff ou MECÂNICO, vê tudo
+        if user.is_staff or hasattr(user, 'mecanico'):
+            return Cliente.objects.all()
+        # Se for cliente, vê só a si mesmo
+        if hasattr(user, 'cliente'):
+            return Cliente.objects.filter(user=user)
+        return Cliente.objects.none()

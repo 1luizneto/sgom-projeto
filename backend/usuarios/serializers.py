@@ -142,16 +142,19 @@ class ClienteSerializer(serializers.ModelSerializer):
     
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Removemos qualquer lógica complexa antes do super().validate()
-        # O authenticate() do Django (nosso arquivo authentication.py) será chamado aqui dentro
+        # Gera o token padrão (access e refresh)
         data = super().validate(attrs)
-        
-        # Adiciona dados extras no retorno (opcional, mas útil pro frontend)
-        data['username'] = self.user.username
-        data['email'] = self.user.email
-        
-        # Verifica se é mecânico
-        is_mecanico = hasattr(self.user, 'mecanico')
+
+        # ADICIONA DADOS EXTRAS NA RESPOSTA DO LOGIN
+        # Verifica se existe um perfil de Mecânico vinculado a este usuário
+        is_mecanico = Mecanico.objects.filter(user=self.user).exists()
         data['is_mecanico'] = is_mecanico
+        
+        # Verifica se é cliente (opcional, mas bom ter)
+        is_cliente = Cliente.objects.filter(user=self.user).exists()
+        data['is_cliente'] = is_cliente
+
+        # Envia o nome do usuário para mostrar na tela depois
+        data['username'] = self.user.username
         
         return data

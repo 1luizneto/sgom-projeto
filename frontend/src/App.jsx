@@ -1,16 +1,25 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import DashboardMecanico from './pages/DashboardMecanico';
 import CadastroUnificado from './pages/CadastroUnificado';
-import DashboardMecanico from './pages/DashboardMecanico'; // <--- Importe aqui
+
+// Crie uma Home simples ou importe se tiver
+const HomeCliente = () => <div className="p-10"><h1>Área do Cliente (Em desenvolvimento)</h1></div>; 
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
+        
+        {/* Rota exclusiva do Mecânico */}
+        <Route path="/dashboard" element={<DashboardMecanico />} />
+        
+        {/* Rota do Cliente */}
+        <Route path="/home" element={<HomeCliente />} />
+
+        {/* Rota do Cadastri */}
         <Route path="/cadastro" element={<CadastroUnificado />} />
-        {/* Nova Rota Protegida */}
-        <Route path="/dashboard-mecanico" element={<DashboardMecanico />} />
       </Routes>
     </BrowserRouter>
   );

@@ -4,11 +4,11 @@ from django.utils.crypto import get_random_string
 from django.core.mail import send_mail
 from django.conf import settings
 from .forms import MecanicoForm
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, AllowAny
-from .models import Mecanico, Cliente
-from .serializers import MecanicoSerializer, ClienteSerializer
+from .models import Mecanico, Cliente, Fornecedor
+from .serializers import MecanicoSerializer, ClienteSerializer, FornecedorSerializer
 
 
 def cadastrar_mecanico(request):
@@ -161,3 +161,13 @@ class ClienteViewSet(viewsets.ModelViewSet):
         if hasattr(user, 'cliente'):
             return Cliente.objects.filter(user=user)
         return Cliente.objects.none()
+    
+class FornecedorViewSet(viewsets.ModelViewSet):
+    queryset = Fornecedor.objects.all()
+    serializer_class = FornecedorSerializer
+
+    def get_permissions(self):
+        # Permite que qualquer um se cadastre (POST), mas só autenticados vejam a lista
+        if self.request.method == 'POST':
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]

@@ -14,5 +14,6 @@ class ClienteAdmin(admin.ModelAdmin):
 
 @admin.register(Fornecedor)
 class FornecedorAdmin(admin.ModelAdmin):
-    list_display = ('id_fornecedor', 'razao_social', 'cnpj', 'telefone')
-    search_fields = ('razao_social', 'cnpj')
+    list_display = ['id', 'nome', 'cnpj', 'telefone', 'data_cadastro']  # <--- Corrigido
+    search_fields = ['nome', 'cnpj']
+    list_filter = ['data_cadastro']

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
-from .models import Mecanico, Cliente
+from .models import Mecanico, Cliente, Fornecedor
 
 class MecanicoSerializer(serializers.ModelSerializer):
     cpf = serializers.CharField(
@@ -140,6 +140,30 @@ class ClienteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({field: 'Este campo é obrigatório.'})
         return attrs
     
+class FornecedorSerializer(serializers.ModelSerializer):
+    # Campos para criar o usuário vinculado
+    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    email = serializers.EmailField(write_only=True, required=False)
+
+    class Meta:
+        model = Fornecedor
+        fields = ['id', 'nome', 'cnpj', 'telefone', 'endereco', 'password', 'email']
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        email = validated_data.pop('email', '')
+        
+        # 1. Cria o Usuário de Acesso (Username = CNPJ)
+        user = User.objects.create_user(
+            username=validated_data['cnpj'], # Credencial de acesso
+            password=password,
+            email=email
+        )
+        
+        # 2. Cria o Fornecedor vinculado
+        fornecedor = Fornecedor.objects.create(user=user, **validated_data)
+        return fornecedor
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         # Gera o token padrão (access e refresh)

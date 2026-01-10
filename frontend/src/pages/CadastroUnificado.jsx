@@ -57,8 +57,58 @@ function CadastroUnificado() {
 
   // --- 2. RENDERIZAÇÃO DOS CAMPOS ---
   const renderCampos = () => {
-    // Campos comuns
-    const comum = (
+    if (tipoUsuario === 'fornecedor') {
+      return (
+        <>
+          <input
+            name="nome"
+            placeholder="Razão Social / Nome da Empresa"
+            onChange={handleChange}
+            className="w-full mb-3 px-3 py-2 border rounded"
+            required
+          />
+          <input
+            name="cnpj"
+            placeholder="CNPJ (00.000.000/0000-00)"
+            onChange={handleChange}
+            className="w-full mb-3 px-3 py-2 border rounded"
+            required
+          />
+          <input
+            name="telefone"
+            placeholder="Telefone Comercial"
+            onChange={handleChange}
+            className="w-full mb-3 px-3 py-2 border rounded"
+            required
+          />
+          <input
+            name="email"
+            type="email"
+            placeholder="Email Comercial (Opcional)"
+            onChange={handleChange}
+            className="w-full mb-3 px-3 py-2 border rounded"
+          />
+          <textarea
+            name="endereco"
+            placeholder="Endereço da Empresa"
+            onChange={handleChange}
+            className="w-full mb-3 px-3 py-2 border rounded"
+            required
+          />
+          <input
+            name="password"
+            type="password"
+            placeholder="Senha de Acesso ao Sistema"
+            onChange={handleChange}
+            className="w-full mb-4 px-3 py-2 border rounded"
+            required
+          />
+        </>
+      );
+    }
+
+    // Campos comuns para Cliente/Mecanico/Gerente
+    return (
       <>
         <input name="nome" placeholder="Nome Completo" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
         <input name="cpf" placeholder="CPF" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
@@ -68,22 +118,6 @@ function CadastroUnificado() {
         <input name="password" type="password" placeholder="Crie sua Senha" onChange={handleChange} className="w-full mb-4 px-3 py-2 border rounded" required />
       </>
     );
-
-    if (tipoUsuario === 'fornecedor') {
-      return (
-        <>
-          <input name="nome_fantasia" placeholder="Nome Fantasia" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
-          <input name="cnpj" placeholder="CNPJ" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
-          <input name="email" type="email" placeholder="Email Comercial" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
-          <input name="telefone" placeholder="Telefone Comercial" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
-          <textarea name="endereco" placeholder="Endereço da Empresa" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
-          <input name="password" type="password" placeholder="Senha de Acesso" onChange={handleChange} className="w-full mb-4 px-3 py-2 border rounded" required />
-        </>
-      );
-    }
-
-    // Default (Cliente, Mecanico, Gerente)
-    return comum;
   };
 
   // --- 3. RETURN PRINCIPAL ---

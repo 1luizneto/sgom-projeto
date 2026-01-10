@@ -124,14 +124,14 @@ function DashboardMecanico() {
       const nomeUser = localStorage.getItem('user_name');
       const eu = mecanicos.find(m => m.nome === nomeUser || (m.user && m.user.username === nomeUser));
       const mecId = eu ? (eu.id_mecanico || eu.id) : (mecanicos[0]?.id_mecanico || mecanicos[0]?.id);
-      
+
       if (!mecId) { alert("Erro: Mecânico não identificado."); return; }
 
       // VALIDA E PREPARA O VALOR
       let valorFinal = parseFloat(novoOrcamento.valor_total);
       if (isNaN(valorFinal) || valorFinal <= 0) {
-          alert("Por favor, insira um valor total válido para a Mão de Obra/Serviço.");
-          return;
+        alert("Por favor, insira um valor total válido para a Mão de Obra/Serviço.");
+        return;
       }
 
       const payload = {
@@ -143,12 +143,12 @@ function DashboardMecanico() {
         validade: novoOrcamento.validade,
         mecanico: parseInt(mecId)
       };
-      
+
       console.log("Enviando:", payload); // Verifique no console se o valor está correto aqui
 
       const token = localStorage.getItem('token');
       await api.post('orcamentos/', payload, { headers: { Authorization: `Bearer ${token}` } });
-      
+
       alert('OS/Orçamento enviado ao cliente com sucesso!');
       setMostrarModalOrcamento(false);
       carregarDadosIniciais();
@@ -157,6 +157,18 @@ function DashboardMecanico() {
       console.error(err);
       if (err.response?.data) alert();
       else alert('Erro ao criar OS.');
+    }
+  };
+
+  const handleCadastraVeiculo = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('veiculos/', novoVeiculo);
+      alert('Veículo cadastrado!');
+      setMostrarModalVeiculo(false);
+      setNovoVeiculo({ cliente: '', placa: '', marca: '', modelo: '', cor: '', ano: '', tipo_combustivel: 'FLEX' });
+    } catch (e) {
+      alert('Erro ao cadastrar veículo. Verifique os dados.');
     }
   };
 
@@ -170,7 +182,9 @@ function DashboardMecanico() {
       <nav className="bg-white border-b px-6 py-4 flex justify-between shadow-sm sticky top-0 z-10">
         <div><h1 className="text-xl font-bold text-gray-800">Oficina Dashboard</h1></div>
         <div className="flex gap-4">
-          <button onClick={() => setMostrarModalVeiculo(true)} className="btn bg-indigo-50 text-indigo-700">Veículo</button>
+          {/* CORREÇÃO 1: Adicionado o "+" no texto */}
+          <button onClick={() => setMostrarModalVeiculo(true)} className="btn bg-indigo-50 text-indigo-700">+ Veículo</button>
+
           <button onClick={() => setMostrarModalAgendamento(true)} className="btn bg-blue-600 text-white shadow-lg">+ Novo Agendamento</button>
           <button onClick={handleLogout} className="text-gray-400 font-bold ml-4">Sair</button>
         </div>
@@ -243,17 +257,48 @@ function DashboardMecanico() {
         </div>
       )}
 
-      {/* MODAL NOVO VEICULO (MANTIDO IGUAL) */}
+      {/* CORREÇÃO 2: Modal de Veículo Completo e Estável */}
       {mostrarModalVeiculo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded p-6 w-full max-w-lg relative">
-            <button onClick={() => setMostrarModalVeiculo(false)} className="absolute top-2 right-2">X</button>
-            <h3>Novo Veículo</h3>
-            <form onSubmit={handleCadastraVeiculo} className="grid gap-2">
-              <select className="input-padrao" value={novoVeiculo.cliente} onChange={e => setNovoVeiculo({ ...novoVeiculo, cliente: e.target.value })} required><option value="">Cliente...</option>{clientes.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>)}</select>
-              <input className="input-padrao" placeholder="Placa" onChange={e => setNovoVeiculo({ ...novoVeiculo, placa: e.target.value })} />
-              <input className="input-padrao" placeholder="Modelo" onChange={e => setNovoVeiculo({ ...novoVeiculo, modelo: e.target.value })} />
-              <button className="bg-blue-600 text-white p-2 rounded">Salvar</button>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg relative animate-fade-in">
+            <button onClick={() => setMostrarModalVeiculo(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">✕</button>
+            <h2 className="text-xl font-bold mb-4 text-indigo-700">Cadastrar Novo Veículo</h2>
+
+            <form onSubmit={handleCadastraVeiculo} className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="lbl">Proprietário</label>
+                <select className="input-padrao" value={novoVeiculo.cliente} onChange={e => setNovoVeiculo({ ...novoVeiculo, cliente: e.target.value })} required>
+                  <option value="">Selecione...</option>
+                  {clientes.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="lbl">Placa</label>
+                <input className="input-padrao uppercase" placeholder="ABC-1234" value={novoVeiculo.placa} onChange={e => setNovoVeiculo({ ...novoVeiculo, placa: e.target.value.toUpperCase() })} required />
+              </div>
+
+              <div>
+                <label className="lbl">Marca</label>
+                <input className="input-padrao" placeholder="Fiat" value={novoVeiculo.marca} onChange={e => setNovoVeiculo({ ...novoVeiculo, marca: e.target.value })} required />
+              </div>
+
+              <div className="col-span-2">
+                <label className="lbl">Modelo</label>
+                <input className="input-padrao" placeholder="Uno Mille" value={novoVeiculo.modelo} onChange={e => setNovoVeiculo({ ...novoVeiculo, modelo: e.target.value })} required />
+              </div>
+
+              <div>
+                <label className="lbl">Cor</label>
+                <input className="input-padrao" placeholder="Branco" value={novoVeiculo.cor} onChange={e => setNovoVeiculo({ ...novoVeiculo, cor: e.target.value })} required />
+              </div>
+
+              <div>
+                <label className="lbl">Ano</label>
+                <input className="input-padrao" type="number" placeholder="2010" value={novoVeiculo.ano} onChange={e => setNovoVeiculo({ ...novoVeiculo, ano: e.target.value })} required />
+              </div>
+
+              <button type="submit" className="col-span-2 bg-indigo-600 text-white font-bold py-3 rounded hover:bg-indigo-700 mt-2">Salvar Veículo</button>
             </form>
           </div>
         </div>

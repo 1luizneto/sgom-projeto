@@ -28,11 +28,12 @@ class Mecanico(models.Model):
         return f"{self.nome} ({self.cpf})"
 
 class Fornecedor(models.Model):
-    id_fornecedor = models.AutoField(primary_key=True)
-    razao_social = models.CharField(max_length=255)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='fornecedor_perfil', null=True, blank=True)
+    nome = models.CharField(max_length=255)
     cnpj = models.CharField(max_length=20, unique=True)
     telefone = models.CharField(max_length=20)
-    endereco = models.TextField()
+    endereco = models.CharField(max_length=255)
+    data_cadastro = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.razao_social
+        return f"{self.nome} ({self.cnpj})"

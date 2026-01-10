@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from usuarios.views import MecanicoViewSet, ClienteViewSet
+from usuarios.views import MecanicoViewSet, ClienteViewSet, FornecedorViewSet
 from veiculos.views import VeiculoViewSet, AgendamentoViewSet, ServicoViewSet,cadastrar_veiculo, agenda_mecanico
 from django.views.generic import RedirectView
 from usuarios.serializers import CustomTokenObtainPairSerializer
@@ -12,6 +12,7 @@ router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'veiculos', VeiculoViewSet, basename='veiculo')
 router.register(r'agendamentos', AgendamentoViewSet, basename='agendamento')
 router.register(r'servicos', ServicoViewSet, basename='servico')
+router.register(r'fornecedor', FornecedorViewSet, basename='fornecedor')
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,

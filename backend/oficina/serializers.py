@@ -15,6 +15,11 @@ class ItemMovimentacaoSerializer(serializers.ModelSerializer):
 class OrcamentoSerializer(serializers.ModelSerializer):
     # Permite ver e criar itens junto com o orçamento (Nested Serializer)
     itens = ItemMovimentacaoSerializer(many=True, read_only=True)
+    veiculo_modelo = serializers.ReadOnlyField(source='veiculo.modelo')
+    veiculo_placa = serializers.ReadOnlyField(source='veiculo.placa')
+    cliente_nome = serializers.ReadOnlyField(source='cliente.nome')
+
+    status = serializers.CharField(required=False)
     
     class Meta:
         model = Orcamento

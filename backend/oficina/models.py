@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 # --- Produto (Estoque) ---
 class Produto(models.Model):
@@ -10,7 +11,7 @@ class Produto(models.Model):
     preco_venda = models.DecimalField(max_digits=10, decimal_places=2)
     qtd_estoque = models.IntegerField(default=0)
     estoque_minimo = models.IntegerField(default=5)
-    
+
     # Referência ao app 'usuarios'
     fornecedor = models.ForeignKey('usuarios.Fornecedor', on_delete=models.SET_NULL, null=True)
 
@@ -88,12 +89,59 @@ class ItemMovimentacao(models.Model):
 class Checklist(models.Model):
     id_checklist = models.AutoField(primary_key=True)
     os = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='checklist')
-    nivel_combustivel = models.CharField(max_length=50)
-    avarias_lataria = models.TextField(blank=True, null=True)
+    
+    # Estado Atual
+    nivel_combustivel = models.CharField(max_length=50) # Ex: 1/4, 1/2, Cheio
+    avarias_lataria = models.TextField(blank=True, null=True) # Mantendo nome legado, mapeado para Avarias Visuais
+    pneus_estado = models.CharField(max_length=100, default='Bom estado') # Novo
+    
+    # Diagnóstico Inicial
+    possivel_defeito = models.TextField(null=True, blank=True) # Obrigatório via serializer
     observacoes = models.TextField(blank=True, null=True)
+    
+    # Auditoria
+    data_criacao = models.DateTimeField(null=True, blank=True)
+    mecanico = models.ForeignKey('usuarios.Mecanico', on_delete=models.SET_NULL, null=True)
+
+    def __str__(self):
+        return f"Checklist OS #{self.os.numero_os}"
 
 class LaudoTecnico(models.Model):
     id_laudo = models.AutoField(primary_key=True)
     os = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='laudo')
-    diagnostico_detalhado = models.TextField()
-    recomendacoes_futuras = models.TextField()
+    
+    # Detalhes do Laudo
+    diagnostico_detalhado = models.TextField() # Obrigatório
+    acoes_corretivas = models.TextField(blank=True, null=True) # O que foi feito
+    recomendacoes_futuras = models.TextField(blank=True, null=True)
+    
+    # Auditoria
+    data_conclusao = models.DateTimeField(default=timezone.now)
+    mecanico = models.ForeignKey('usuarios.Mecanico', on_delete=models.PROTECT, null=True) # Responsável pelo laudo
+
+    def __str__(self):
+        return f"Laudo Técnico - OS #{self.os.numero_os}"
+
+# --- Venda Balcão ---
+class Venda(models.Model):
+    id_venda = models.AutoField(primary_key=True)
+    data_venda = models.DateTimeField(auto_now_add=True)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    def __str__(self):
+        return f"Venda #{self.id_venda} - {self.data_venda.strftime('%d/%m/%Y')}"
+
+class ItemVenda(models.Model):
+    id_item_venda = models.AutoField(primary_key=True)
+    venda = models.ForeignKey(Venda, on_delete=models.CASCADE, related_name='itens')
+    produto = models.ForeignKey(Produto, on_delete=models.PROTECT)
+    quantidade = models.IntegerField()
+    valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
+
+    def save(self, *args, **kwargs):
+        self.subtotal = self.quantidade * self.valor_unitario
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.quantidade}x {self.produto.nome} (Venda #{self.venda.id_venda})"

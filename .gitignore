@@ -13,3 +13,5 @@ dist/
 # Docker
 .docker_data/
 postgres_data/
+
+.vscode/

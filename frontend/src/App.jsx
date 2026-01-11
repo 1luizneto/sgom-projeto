@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import DashboardMecanico from './pages/DashboardMecanico';
 import CadastroUnificado from './pages/CadastroUnificado';
 import HomeCliente from './pages/HomeCliente';
+import DashboardFornecedor from './pages/DashboardFornecedor';
 
 function App() {
   return (
@@ -18,6 +19,8 @@ function App() {
 
         {/* Rota do Cadastro */}
         <Route path="/cadastro" element={<CadastroUnificado />} />
+
+        <Route path="/fornecedor" element={<DashboardFornecedor />} />
       </Routes>
     </BrowserRouter>
   );

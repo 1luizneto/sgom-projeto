@@ -7,7 +7,7 @@ from django.db import transaction
 
 # Importação explícita de todos os modelos necessários
 from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico, Produto
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer
+from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer, OrdemServicoSerializer
 from usuarios.models import Fornecedor
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
@@ -200,3 +200,28 @@ class ProdutoViewSet(viewsets.ModelViewSet):
             serializer.save(fornecedor=fornecedor)
         except Fornecedor.DoesNotExist:
             raise serializers.ValidationError("Apenas fornecedores podem cadastrar produtos.")
+        
+class OrdemServicoViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gerenciar Ordens de Serviço (OS).
+    """
+    queryset = OrdemServico.objects.all()
+    serializer_class = OrdemServicoSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """
+        Permite filtrar OS por veículo ou status.
+        Ex: /api/ordens-servico/?veiculo=1&status=EM_ANDAMENTO
+        """
+        queryset = OrdemServico.objects.all()
+        
+        veiculo_id = self.request.query_params.get('veiculo', None)
+        status = self.request.query_params.get('status', None)
+        
+        if veiculo_id:
+            queryset = queryset.filter(veiculo__id_veiculo=veiculo_id)
+        if status:
+            queryset = queryset.filter(status=status)
+            
+        return queryset.order_by('-data_abertura')

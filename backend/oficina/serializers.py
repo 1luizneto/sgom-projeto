@@ -171,3 +171,17 @@ class ProdutoSerializer(serializers.ModelSerializer):
             if field not in attrs or attrs[field] in [None, '']:
                 raise serializers.ValidationError({field: 'Este campo é obrigatório.'})
         return attrs
+
+class OrdemServicoSerializer(serializers.ModelSerializer):
+    veiculo_modelo = serializers.ReadOnlyField(source='veiculo.modelo')
+    veiculo_placa = serializers.ReadOnlyField(source='veiculo.placa')
+    mecanico_nome = serializers.ReadOnlyField(source='mecanico_responsavel.nome')
+    
+    class Meta:
+        model = OrdemServico
+        fields = [
+            'id_os', 'numero_os', 'data_abertura', 'data_conclusao', 
+            'status', 'orcamento', 'veiculo', 'veiculo_modelo', 
+            'veiculo_placa', 'mecanico_responsavel', 'mecanico_nome'
+        ]
+        read_only_fields = ['data_abertura']

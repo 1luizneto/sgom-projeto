@@ -1,22 +1,27 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from usuarios.models import Fornecedor
 
 # --- Produto (Estoque) ---
 class Produto(models.Model):
     id_produto = models.AutoField(primary_key=True)
+    fornecedor = models.ForeignKey(Fornecedor, on_delete=models.CASCADE, related_name='produtos')
     nome = models.CharField(max_length=255)
     descricao = models.TextField(blank=True, null=True)
-    custo_compra = models.DecimalField(max_digits=10, decimal_places=2)
+    custo = models.DecimalField(max_digits=10, decimal_places=2)
     preco_venda = models.DecimalField(max_digits=10, decimal_places=2)
-    qtd_estoque = models.IntegerField(default=0)
-    estoque_minimo = models.IntegerField(default=5)
-
-    # Referência ao app 'usuarios'
-    fornecedor = models.ForeignKey('usuarios.Fornecedor', on_delete=models.SET_NULL, null=True)
+    estoque_minimo = models.IntegerField(default=0)
+    estoque_atual = models.IntegerField(default=0)
+    data_cadastro = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.nome
+        return f"{self.nome} - {self.fornecedor.nome}"
+
+    class Meta:
+        verbose_name = "Produto"
+        verbose_name_plural = "Produtos"
+        ordering = ['-data_cadastro']
 
 # --- Orçamento ---
 class Orcamento(models.Model):

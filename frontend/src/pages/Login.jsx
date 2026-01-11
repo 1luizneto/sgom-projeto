@@ -20,7 +20,7 @@ function Login() {
       });
 
       // Extrai os dados da resposta
-      const { access, refresh, is_mecanico, user_name } = response.data;
+      const { access, refresh, is_mecanico, user_name, is_cliente } = response.data;
 
       // Salva no LocalStorage
       localStorage.setItem('token', access);
@@ -34,9 +34,12 @@ function Login() {
       if (is_mecanico) {
         console.log("Login: Mecânico detectado.");
         navigate('/dashboard');
-      } else {
+      } else if (is_cliente){
         console.log("Login: Cliente detectado.");
         navigate('/home'); 
+      }
+      else {
+        navigate('/fornecedor');
       }
 
     } catch (err) {

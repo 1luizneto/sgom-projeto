@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico
 from veiculos.models import Servico
+from usuarios.models import Fornecedor
 
 class ItemMovimentacaoSerializer(serializers.ModelSerializer):
     # Campos calculados para facilitar a leitura no frontend
@@ -137,3 +138,50 @@ class ChecklistSerializer(serializers.ModelSerializer):
              raise serializers.ValidationError("É necessário informar o estado atual do veículo (combustível, avarias ou pneus).")
 
         return data
+    
+class ProdutoSerializer(serializers.ModelSerializer):
+    # Campo read-only para exibir o nome do fornecedor na listagem
+    fornecedor_nome = serializers.ReadOnlyField(source='fornecedor.nome')
+
+    class Meta:
+        model = Produto
+        fields = [
+            'id_produto', 'fornecedor', 'fornecedor_nome', 
+            'nome', 'descricao', 'custo', 'preco_venda', 
+            'estoque_minimo', 'estoque_atual', 'data_cadastro'
+        ]
+        read_only_fields = ['fornecedor', 'data_cadastro']  # Fornecedor é setado automaticamente
+
+    def validate_preco_venda(self, value):
+        """TC05 - Cenário 3: Preço deve ser maior que zero"""
+        if value <= 0:
+            raise serializers.ValidationError("O preço de venda deve ser maior que zero.")
+        return value
+
+    def validate_custo(self, value):
+        """Validação adicional de segurança"""
+        if value < 0:
+            raise serializers.ValidationError("O custo não pode ser negativo.")
+        return value
+
+    def validate(self, attrs):
+        """TC05 - Cenário 2: Campos obrigatórios"""
+        required_fields = ['nome', 'custo', 'preco_venda', 'estoque_minimo']
+        for field in required_fields:
+            if field not in attrs or attrs[field] in [None, '']:
+                raise serializers.ValidationError({field: 'Este campo é obrigatório.'})
+        return attrs
+
+class OrdemServicoSerializer(serializers.ModelSerializer):
+    veiculo_modelo = serializers.ReadOnlyField(source='veiculo.modelo')
+    veiculo_placa = serializers.ReadOnlyField(source='veiculo.placa')
+    mecanico_nome = serializers.ReadOnlyField(source='mecanico_responsavel.nome')
+    
+    class Meta:
+        model = OrdemServico
+        fields = [
+            'id_os', 'numero_os', 'data_abertura', 'data_conclusao', 
+            'status', 'orcamento', 'veiculo', 'veiculo_modelo', 
+            'veiculo_placa', 'mecanico_responsavel', 'mecanico_nome'
+        ]
+        read_only_fields = ['data_abertura']

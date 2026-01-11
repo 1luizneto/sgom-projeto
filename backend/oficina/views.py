@@ -1,12 +1,14 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 
 # Importação explícita de todos os modelos necessários
-from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer
+from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico, Produto
+from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer, OrdemServicoSerializer
+from usuarios.models import Fornecedor
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
     queryset = Orcamento.objects.all()
@@ -168,3 +170,58 @@ class LaudoTecnicoViewSet(viewsets.ModelViewSet):
             serializer.save(mecanico=mecanico)
         else:
             serializer.save()
+
+class ProdutoViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para CRUD de Produtos (PB05)
+    - Apenas fornecedores autenticados podem criar
+    - Cada fornecedor vê apenas seus produtos
+    - O vínculo fornecedor é automático
+    """
+    serializer_class = ProdutoSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Cada fornecedor vê apenas seus próprios produtos"""
+        user = self.request.user
+        try:
+            fornecedor = Fornecedor.objects.get(user=user)
+            return Produto.objects.filter(fornecedor=fornecedor)
+        except Fornecedor.DoesNotExist:
+            # Se não for fornecedor, retorna vazio (admin vê tudo via admin panel)
+            if user.is_staff:
+                return Produto.objects.all()
+            return Produto.objects.none()
+
+    def perform_create(self, serializer):
+        """TC05 - Cenário 1: Vínculo Automático do Fornecedor"""
+        try:
+            fornecedor = Fornecedor.objects.get(user=self.request.user)
+            serializer.save(fornecedor=fornecedor)
+        except Fornecedor.DoesNotExist:
+            raise serializers.ValidationError("Apenas fornecedores podem cadastrar produtos.")
+        
+class OrdemServicoViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gerenciar Ordens de Serviço (OS).
+    """
+    queryset = OrdemServico.objects.all()
+    serializer_class = OrdemServicoSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """
+        Permite filtrar OS por veículo ou status.
+        Ex: /api/ordens-servico/?veiculo=1&status=EM_ANDAMENTO
+        """
+        queryset = OrdemServico.objects.all()
+        
+        veiculo_id = self.request.query_params.get('veiculo', None)
+        status = self.request.query_params.get('status', None)
+        
+        if veiculo_id:
+            queryset = queryset.filter(veiculo__id_veiculo=veiculo_id)
+        if status:
+            queryset = queryset.filter(status=status)
+            
+        return queryset.order_by('-data_abertura')

@@ -37,3 +37,13 @@ class Fornecedor(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.cnpj})"
+
+class Administrador(models.Model):
+    id_admin = models.AutoField(primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='administrador')
+    nome = models.CharField(max_length=255)
+    email = models.EmailField(unique=True)
+    telefone = models.CharField(max_length=20, blank=True, null=True)
+
+    def __str__(self):
+        return self.nome

@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.db.models import Sum, F
-from .models import ItemMovimentacao, OrdemServico, Notificacao
+from .models import ItemMovimentacao, OrdemServico, Notificacao, MovimentacaoEstoque
 
 @receiver(post_save, sender=ItemMovimentacao)
 @receiver(post_delete, sender=ItemMovimentacao)
@@ -85,3 +85,32 @@ def baixar_estoque_ao_concluir_os(sender, instance, **kwargs):
                           mensagem=f"Alerta de Estoque Baixo: O produto '{produto.nome}' está com {produto.estoque_atual} unidades (Mínimo: {produto.estoque_minimo}).",
                           produto=produto
                      )
+
+@receiver(post_save, sender=OrdemServico)
+def atualizar_estoque_ao_finalizar_os(sender, instance, created, **kwargs):
+    """
+    Quando uma OS é marcada como CONCLUÍDA, registra a saída de estoque
+    dos produtos usados (PB11 - TC11 Cenário 1)
+    """
+    if instance.status == 'CONCLUIDA' and instance.orcamento:
+        # Busca os itens do orçamento associado
+        itens = instance.orcamento.itens.all()
+        
+        for item in itens:
+            # Verifica se já existe movimentação para este item
+            ja_registrado = MovimentacaoEstoque.objects.filter(
+                ordem_servico=instance,
+                produto=item.produto,
+                tipo_movimentacao='SAIDA'
+            ).exists()
+            
+            if not ja_registrado:
+                # ✅ REGISTRA A SAÍDA NO HISTÓRICO
+                MovimentacaoEstoque.objects.create(
+                    produto=item.produto,
+                    tipo_movimentacao='SAIDA',
+                    quantidade=item.quantidade,
+                    observacao=f'Uso em OS #{instance.numero_os}',
+                    ordem_servico=instance
+                )
+                # O método save() já abate o estoque

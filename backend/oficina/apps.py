@@ -5,4 +5,4 @@ class OficinaConfig(AppConfig):
     name = 'oficina'
 
     def ready(self):
-        import oficina.signals  
+        import oficina.signals

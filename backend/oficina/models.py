@@ -150,3 +150,17 @@ class ItemVenda(models.Model):
 
     def __str__(self):
         return f"{self.quantidade}x {self.produto.nome} (Venda #{self.venda.id_venda})"
+
+# --- Notificações ---
+class Notificacao(models.Model):
+    id_notificacao = models.AutoField(primary_key=True)
+    mensagem = models.TextField()
+    produto = models.ForeignKey(Produto, on_delete=models.SET_NULL, null=True, blank=True, related_name='notificacoes')
+    lida = models.BooleanField(default=False)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-data_criacao']
+
+    def __str__(self):
+        return f"Notificação: {self.mensagem[:50]}..."

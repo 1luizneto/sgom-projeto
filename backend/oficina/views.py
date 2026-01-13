@@ -4,10 +4,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import F
 
 # Importação explícita de todos os modelos necessários
-from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico, Produto
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer, OrdemServicoSerializer
+from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico, Produto, Notificacao
+from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer, OrdemServicoSerializer, NotificacaoSerializer
 from usuarios.models import Fornecedor
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
@@ -184,14 +185,22 @@ class ProdutoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Cada fornecedor vê apenas seus próprios produtos"""
         user = self.request.user
+        queryset = Produto.objects.none()
+        
         try:
             fornecedor = Fornecedor.objects.get(user=user)
-            return Produto.objects.filter(fornecedor=fornecedor)
+            queryset = Produto.objects.filter(fornecedor=fornecedor)
         except Fornecedor.DoesNotExist:
             # Se não for fornecedor, retorna vazio (admin vê tudo via admin panel)
             if user.is_staff:
-                return Produto.objects.all()
-            return Produto.objects.none()
+                queryset = Produto.objects.all()
+        
+        # Filtro de Estoque Baixo (PB10)
+        estoque_baixo = self.request.query_params.get('estoque_baixo', None)
+        if estoque_baixo == 'true':
+            queryset = queryset.filter(estoque_atual__lt=F('estoque_minimo'))
+            
+        return queryset
 
     def perform_create(self, serializer):
         """TC05 - Cenário 1: Vínculo Automático do Fornecedor"""
@@ -224,4 +233,27 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         if status:
             queryset = queryset.filter(status=status)
             
+        return queryset.order_by('-data_abertura')
+
+class NotificacaoViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para listar e marcar notificações como lidas.
+    """
+    queryset = Notificacao.objects.all()
+    serializer_class = NotificacaoSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = Notificacao.objects.all()
+        apenas_nao_lidas = self.request.query_params.get('nao_lidas', None)
+        if apenas_nao_lidas == 'true':
+            queryset = queryset.filter(lida=False)
+        return queryset
+
+    @action(detail=True, methods=['post'])
+    def marcar_lida(self, request, pk=None):
+        notificacao = self.get_object()
+        notificacao.lida = True
+        notificacao.save()
+        return Response({'status': 'notificacao marcada como lida'})
         return queryset.order_by('-data_abertura')

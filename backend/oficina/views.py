@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import F
@@ -114,6 +114,7 @@ class ItemMovimentacaoViewSet(viewsets.ModelViewSet):
 class VendaViewSet(viewsets.ModelViewSet):
     queryset = Venda.objects.all()
     serializer_class = VendaSerializer
+    permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
         """
@@ -180,20 +181,31 @@ class ProdutoViewSet(viewsets.ModelViewSet):
     - O vínculo fornecedor é automático
     """
     serializer_class = ProdutoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
-        """Cada fornecedor vê apenas seus próprios produtos"""
+        """
+        - Fornecedor autenticado: vê apenas seus produtos
+        - Admin: vê todos
+        - Outros (mecânicos, vendas balcão): vê todos os produtos
+        """
         user = self.request.user
-        queryset = Produto.objects.none()
         
+        # Se não autenticado ou é mecânico/outros → retorna todos os produtos
+        if not user.is_authenticated:
+            return Produto.objects.all()
+        
+        # Se é admin → retorna todos
+        if user.is_staff:
+            return Produto.objects.all()
+        
+        # Se é fornecedor → retorna apenas seus produtos
         try:
             fornecedor = Fornecedor.objects.get(user=user)
             queryset = Produto.objects.filter(fornecedor=fornecedor)
         except Fornecedor.DoesNotExist:
-            # Se não for fornecedor, retorna vazio (admin vê tudo via admin panel)
-            if user.is_staff:
-                queryset = Produto.objects.all()
+            # Se não é fornecedor (ex: mecânico), retorna todos os produtos
+            queryset = Produto.objects.all()
         
         # Filtro de Estoque Baixo (PB10)
         estoque_baixo = self.request.query_params.get('estoque_baixo', None)

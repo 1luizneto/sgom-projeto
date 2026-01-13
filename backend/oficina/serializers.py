@@ -73,10 +73,7 @@ class ItemVendaSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemVenda
         fields = ['id_item_venda', 'venda', 'produto', 'nome_produto', 'quantidade', 'valor_unitario', 'subtotal']
-        read_only_fields = ['venda']
-        extra_kwargs = {
-            'quantidade': {'min_value': 1}
-        }
+        read_only_fields = ['venda', 'subtotal']
 
 class VendaSerializer(serializers.ModelSerializer):
     itens = ItemVendaSerializer(many=True)
@@ -88,17 +85,18 @@ class VendaSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         itens_data = validated_data.pop('itens')
-        venda = Venda.objects.create(**validated_data)
+        venda = Venda.objects.create(total=0)
         
         total_venda = 0
         for item_data in itens_data:
             produto = item_data['produto']
             quantidade = item_data['quantidade']
+            valor_unitario = item_data['valor_unitario']
             
-            # Validação de Estoque (Requisito: impedir venda se estoque insuficiente)
+            # Validação de Estoque
             if produto.estoque_atual < quantidade:
                 raise serializers.ValidationError(
-                    f"Quantidade solicitada superior ao estoque disponível para o produto {produto.nome} (Atual: {produto.estoque_atual})"
+                    f"Estoque insuficiente para {produto.nome} (Disponível: {produto.estoque_atual})"
                 )
             
             # Atualiza estoque
@@ -106,7 +104,12 @@ class VendaSerializer(serializers.ModelSerializer):
             produto.save()
             
             # Cria item
-            item_venda = ItemVenda.objects.create(venda=venda, **item_data)
+            item_venda = ItemVenda.objects.create(
+                venda=venda,
+                produto=produto,
+                quantidade=quantidade,
+                valor_unitario=valor_unitario
+            )
             total_venda += item_venda.subtotal
             
         venda.total = total_venda

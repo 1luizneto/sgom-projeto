@@ -258,25 +258,29 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
 
 class NotificacaoViewSet(viewsets.ModelViewSet):
     """
-    ViewSet para listar e marcar notificações como lidas.
+    ViewSet para Notificações de Estoque Baixo (PB12)
     """
     queryset = Notificacao.objects.all()
     serializer_class = NotificacaoSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
         queryset = Notificacao.objects.all()
-        apenas_nao_lidas = self.request.query_params.get('nao_lidas', None)
-        if apenas_nao_lidas == 'true':
+        
+        # Filtrar por não lidas (PB12 - TC12 Cenário 2)
+        nao_lidas = self.request.query_params.get('nao_lidas', None)
+        if nao_lidas == 'true':
             queryset = queryset.filter(lida=False)
-        return queryset
+        
+        return queryset.order_by('-data_criacao')
 
     @action(detail=True, methods=['post'])
     def marcar_lida(self, request, pk=None):
+        """Marca uma notificação como lida"""
         notificacao = self.get_object()
         notificacao.lida = True
         notificacao.save()
-        return Response({'status': 'notificacao marcada como lida'})
+        return Response({'status': 'Notificação marcada como lida'})
 
 class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
     """

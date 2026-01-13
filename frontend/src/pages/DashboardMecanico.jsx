@@ -11,14 +11,19 @@ function DashboardMecanico() {
   const [clientes, setClientes] = useState([]);
   const [mecanicos, setMecanicos] = useState([]);
   const [veiculosDoCliente, setVeiculosDoCliente] = useState([]);
-  const [produtos, setProdutos] = useState([]); // <--- NOVO: Lista de produtos
+  const [produtos, setProdutos] = useState([]);
+  const [notificacoes, setNotificacoes] = useState([]); // <--- NOVO: Notificações
 
   // --- CONTROLE DOS MODAIS ---
   const [mostrarModalVeiculo, setMostrarModalVeiculo] = useState(false);
   const [mostrarModalAgendamento, setMostrarModalAgendamento] = useState(false);
   const [mostrarModalOrcamento, setMostrarModalOrcamento] = useState(false);
   const [mostrarModalChecklist, setMostrarModalChecklist] = useState(false);
-  const [mostrarModalVendaBalcao, setMostrarModalVendaBalcao] = useState(false); // <--- NOVO
+  const [mostrarModalVendaBalcao, setMostrarModalVendaBalcao] = useState(false);
+  const [mostrarModalEstoque, setMostrarModalEstoque] = useState(false); // <--- NOVO: Modal de Estoque
+
+  // --- NOVO: Filtro de Estoque Baixo (PB12 - TC12 Cenário 3) ---
+  const [filtroEstoqueBaixo, setFiltroEstoqueBaixo] = useState(false);
 
   // --- FORMULÁRIOS ---
   const [novoAgendamento, setNovoAgendamento] = useState({ cliente: '', veiculo: '', servico: '', horario_inicio: '', preco: '', mecanico: '' });
@@ -79,13 +84,15 @@ function DashboardMecanico() {
         api.get('servicos/'),
         api.get('clientes/'),
         api.get('mecanicos/'),
-        api.get('produtos/')  // <--- NOVO: Carregar produtos
+        api.get('produtos/'),
+        api.get('notificacoes/?nao_lidas=true')  // <--- NOVO: Carregar notificações não lidas
       ]);
       setAgendamentos(resp[0].data);
       setServicos(resp[1].data);
       setClientes(resp[2].data);
       setMecanicos(resp[3].data || []);
-      setProdutos(resp[4].data || []); // <--- NOVO
+      setProdutos(resp[4].data || []);
+      setNotificacoes(resp[5].data || []); // <--- NOVO
 
       const user = localStorage.getItem('user_name');
       const eu = resp[3].data?.find(m => m.nome === user || m.user?.username === user);
@@ -362,6 +369,30 @@ function DashboardMecanico() {
     p.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
   );
 
+  // --- NOVO: Função para abrir o modal de estoque ---
+  const abrirModalEstoque = () => {
+    setFiltroEstoqueBaixo(false);
+    setMostrarModalEstoque(true);
+  };
+
+  // --- NOVO: Função para marcar notificação como lida ---
+  const marcarNotificacaoLida = async (idNotificacao) => {
+    try {
+      await api.post(`notificacoes/${idNotificacao}/marcar_lida/`);
+      setNotificacoes(notificacoes.filter(n => n.id_notificacao !== idNotificacao));
+    } catch (err) {
+      console.error('Erro ao marcar notificação como lida:', err);
+    }
+  };
+
+  // --- NOVO: Filtrar produtos por estoque baixo (TC12 - Cenário 3) ---
+  const produtosFiltradosEstoque = filtroEstoqueBaixo
+    ? produtos.filter(p => p.estoque_atual < p.estoque_minimo)
+    : produtos;
+
+  // --- NOVO: Contar produtos com estoque baixo ---
+  const produtosEstoqueBaixo = produtos.filter(p => p.estoque_atual < p.estoque_minimo);
+
   const handleLogout = () => { localStorage.removeItem('token'); navigate('/'); };
   const hoje = new Date().toLocaleDateString('pt-BR');
   const agendamentosHoje = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje);
@@ -371,15 +402,86 @@ function DashboardMecanico() {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       <nav className="bg-white border-b px-6 py-4 flex justify-between shadow-sm sticky top-0 z-10">
         <div><h1 className="text-xl font-bold text-gray-800">Oficina Dashboard</h1></div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          {/* NOVO: Badge de Notificações */}
+          {notificacoes.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={abrirModalEstoque}
+                className="bg-red-100 text-red-700 px-4 py-2 rounded-lg font-bold hover:bg-red-200 flex items-center gap-2"
+              >
+                🔔 Alertas de Estoque
+                <span className="bg-red-600 text-white text-xs rounded-full px-2 py-1">
+                  {notificacoes.length}
+                </span>
+              </button>
+            </div>
+          )}
+
           <button onClick={() => setMostrarModalVeiculo(true)} className="btn bg-indigo-50 text-indigo-700">+ Veículo</button>
           <button onClick={() => setMostrarModalAgendamento(true)} className="btn bg-blue-600 text-white shadow-lg">+ Novo Agendamento</button>
           <button onClick={abrirModalVendaBalcao} className="btn bg-green-600 text-white shadow-lg">💰 Venda Balcão</button>
+          <button onClick={abrirModalEstoque} className="btn bg-orange-600 text-white shadow-lg">
+            📦 Estoque
+            {produtosEstoqueBaixo.length > 0 && (
+              <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2">
+                {produtosEstoqueBaixo.length}
+              </span>
+            )}
+          </button>
           <button onClick={handleLogout} className="text-gray-400 font-bold ml-4">Sair</button>
         </div>
       </nav>
 
       <main className="flex-1 p-8 max-w-7xl mx-auto w-full flex flex-col gap-8">
+        {/* NOVO: Alertas de Estoque Baixo (PB12 - TC12 Cenário 2) */}
+        {notificacoes.length > 0 && (
+          <section className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
+                🔔 Alertas de Estoque Baixo ({notificacoes.length})
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {notificacoes.slice(0, 3).map(notif => (
+                <div key={notif.id_notificacao} className="bg-white p-3 rounded border border-red-200 flex justify-between items-center">
+                  <div>
+                    <p className="font-bold text-red-700">{notif.mensagem}</p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(notif.data_criacao).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => marcarNotificacaoLida(notif.id_notificacao)}
+                      className="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300"
+                    >
+                      Dispensar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMostrarModalEstoque(true);
+                        marcarNotificacaoLida(notif.id_notificacao);
+                      }}
+                      className="text-sm bg-orange-600 text-white px-3 py-1 rounded hover:bg-orange-700"
+                    >
+                      Ver Estoque
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {notificacoes.length > 3 && (
+              <button
+                onClick={abrirModalEstoque}
+                className="mt-3 text-sm text-red-700 font-bold hover:underline"
+              >
+                Ver todas ({notificacoes.length})
+              </button>
+            )}
+          </section>
+        )}
+
         <section>
           <div className="flex items-center mb-6 gap-3"><h2 className="text-2xl font-bold text-gray-800">Agenda de Hoje</h2></div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -413,6 +515,156 @@ function DashboardMecanico() {
           </div>
         </section>
       </main>
+
+      {/* NOVO: MODAL DE MONITORAMENTO DE ESTOQUE (PB12) */}
+      {mostrarModalEstoque && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-5xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setMostrarModalEstoque(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-2xl font-bold mb-6 text-orange-700">📦 Monitoramento de Estoque</h2>
+
+            {/* Filtros (TC12 - Cenário 3) */}
+            <div className="flex gap-4 mb-6">
+              <button
+                onClick={() => setFiltroEstoqueBaixo(false)}
+                className={`px-4 py-2 rounded-lg font-bold ${!filtroEstoqueBaixo
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+              >
+                Todos os Produtos ({produtos.length})
+              </button>
+              <button
+                onClick={() => setFiltroEstoqueBaixo(true)}
+                className={`px-4 py-2 rounded-lg font-bold ${filtroEstoqueBaixo
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+              >
+                🔴 Estoque Baixo ({produtosEstoqueBaixo.length})
+              </button>
+            </div>
+
+            {/* Lista de Produtos (TC12 - Cenário 1) */}
+            <div className="space-y-3">
+              {produtosFiltradosEstoque.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">
+                  {filtroEstoqueBaixo
+                    ? '✅ Nenhum produto com estoque baixo'
+                    : 'Nenhum produto cadastrado'}
+                </p>
+              ) : (
+                produtosFiltradosEstoque.map(produto => {
+                  const estoqueBaixo = produto.estoque_atual < produto.estoque_minimo;
+                  const percentualEstoque = (produto.estoque_atual / produto.estoque_minimo) * 100;
+
+                  return (
+                    <div
+                      key={produto.id_produto}
+                      className={`p-4 rounded-lg border-2 ${estoqueBaixo
+                          ? 'bg-red-50 border-red-300'
+                          : 'bg-white border-gray-200'
+                        }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-bold text-gray-800">
+                              {produto.nome}
+                            </h3>
+                            {estoqueBaixo && (
+                              <span className="bg-red-600 text-white text-xs px-2 py-1 rounded font-bold">
+                                ⚠️ ESTOQUE BAIXO
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-sm text-gray-600 mb-3">
+                            {produto.descricao || 'Sem descrição'}
+                          </p>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-xs text-gray-500">Estoque Atual</p>
+                              <p className={`text-2xl font-bold ${estoqueBaixo ? 'text-red-600' : 'text-green-600'
+                                }`}>
+                                {produto.estoque_atual} un.
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">Estoque Mínimo</p>
+                              <p className="text-lg font-bold text-gray-700">
+                                {produto.estoque_minimo} un.
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">Fornecedor</p>
+                              <p className="text-sm font-bold text-gray-700">
+                                {produto.fornecedor_nome || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Barra de Progresso Visual (TC12 - Cenário 1) */}
+                          <div className="mt-3">
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                              <div
+                                className={`h-3 rounded-full transition-all ${estoqueBaixo ? 'bg-red-600' : 'bg-green-600'
+                                  }`}
+                                style={{ width: `${Math.min(percentualEstoque, 100)}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {percentualEstoque.toFixed(0)}% do estoque mínimo
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right ml-4">
+                          <p className="text-xs text-gray-500">Preço Venda</p>
+                          <p className="text-lg font-bold text-green-600">
+                            R$ {parseFloat(produto.preco_venda).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Resumo */}
+            <div className="mt-6 pt-4 border-t">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600">Total de Produtos</p>
+                  <p className="text-3xl font-bold text-blue-600">{produtos.length}</p>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600">Estoque OK</p>
+                  <p className="text-3xl font-bold text-green-600">
+                    {produtos.length - produtosEstoqueBaixo.length}
+                  </p>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600">Estoque Baixo</p>
+                  <p className="text-3xl font-bold text-red-600">
+                    {produtosEstoqueBaixo.length}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL VENDA BALCÃO - NOVO (PB07) */}
       {mostrarModalVendaBalcao && (

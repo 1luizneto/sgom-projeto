@@ -219,7 +219,7 @@ function DashboardAdmin() {
                                     </div>
                                 </div>
                             ))
-                        }
+                        )};
                     </div>
                 </section>
             </main>

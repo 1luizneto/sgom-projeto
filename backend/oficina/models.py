@@ -150,6 +150,8 @@ class ItemVenda(models.Model):
 
     def __str__(self):
         return f"{self.quantidade}x {self.produto.nome} (Venda #{self.venda.id_venda})"
+    
+#
 
 # --- Notificações ---
 class Notificacao(models.Model):

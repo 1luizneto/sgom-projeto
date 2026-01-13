@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico
+from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico, Notificacao
 from veiculos.models import Servico
 from usuarios.models import Fornecedor
 
@@ -96,13 +96,13 @@ class VendaSerializer(serializers.ModelSerializer):
             quantidade = item_data['quantidade']
             
             # Validação de Estoque (Requisito: impedir venda se estoque insuficiente)
-            if produto.qtd_estoque < quantidade:
+            if produto.estoque_atual < quantidade:
                 raise serializers.ValidationError(
-                    f"Quantidade solicitada superior ao estoque disponível para o produto {produto.nome} (Atual: {produto.qtd_estoque})"
+                    f"Quantidade solicitada superior ao estoque disponível para o produto {produto.nome} (Atual: {produto.estoque_atual})"
                 )
             
             # Atualiza estoque
-            produto.qtd_estoque -= quantidade
+            produto.estoque_atual -= quantidade
             produto.save()
             
             # Cria item
@@ -185,3 +185,11 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'veiculo_placa', 'mecanico_responsavel', 'mecanico_nome'
         ]
         read_only_fields = ['data_abertura']
+
+class NotificacaoSerializer(serializers.ModelSerializer):
+    produto_nome = serializers.ReadOnlyField(source='produto.nome')
+    
+    class Meta:
+        model = Notificacao
+        fields = ['id_notificacao', 'mensagem', 'produto', 'produto_nome', 'lida', 'data_criacao']
+        read_only_fields = ['data_criacao']

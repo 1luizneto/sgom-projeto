@@ -166,3 +166,46 @@ class Notificacao(models.Model):
 
     def __str__(self):
         return f"Notificação: {self.mensagem[:50]}..."
+
+class MovimentacaoEstoque(models.Model):
+    """
+    Modelo para registrar TODAS as movimentações de estoque (PB11)
+    - ENTRADA: Compra/reposição manual pelo Admin
+    - SAIDA: Venda Balcão ou uso em OS
+    """
+    TIPO_CHOICES = [
+        ('ENTRADA', 'Entrada'),
+        ('SAIDA', 'Saída'),
+    ]
+
+    id_movimentacao = models.AutoField(primary_key=True)
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='movimentacoes')
+    tipo_movimentacao = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    quantidade = models.IntegerField()
+    custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Custo na compra (apenas para ENTRADA)")
+    data_movimentacao = models.DateTimeField(auto_now_add=True)
+    observacao = models.TextField(blank=True, null=True)
+    venda = models.ForeignKey('Venda', on_delete=models.SET_NULL, null=True, blank=True, related_name='movimentacoes')
+    ordem_servico = models.ForeignKey('OrdemServico', on_delete=models.SET_NULL, null=True, blank=True, related_name='movimentacoes')
+
+    def save(self, *args, **kwargs):
+        """Atualiza o estoque automaticamente ao salvar"""
+        if not self.pk:  # Apenas na criação (não ao editar)
+            if self.tipo_movimentacao == 'ENTRADA':
+                self.produto.estoque_atual += self.quantidade
+            elif self.tipo_movimentacao == 'SAIDA':
+                if self.produto.estoque_atual < self.quantidade:
+                    raise ValueError(f"Estoque insuficiente para {self.produto.nome}. Disponível: {self.produto.estoque_atual}")
+                self.produto.estoque_atual -= self.quantidade
+            
+            self.produto.save()
+        
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.tipo_movimentacao} - {self.produto.nome} ({self.quantidade}un) - {self.data_movimentacao.strftime('%d/%m/%Y %H:%M')}"
+
+    class Meta:
+        ordering = ['-data_movimentacao']
+        verbose_name = 'Movimentação de Estoque'
+        verbose_name_plural = 'Movimentações de Estoque'

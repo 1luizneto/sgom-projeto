@@ -6,9 +6,9 @@ from django.conf import settings
 from .forms import MecanicoForm
 from rest_framework import viewsets, status, permissions
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser, AllowAny
-from .models import Mecanico, Cliente, Fornecedor
-from .serializers import MecanicoSerializer, ClienteSerializer, FornecedorSerializer
+from rest_framework.permissions import IsAdminUser, AllowAny, IsAuthenticated
+from .models import Mecanico, Cliente, Fornecedor, Administrador
+from .serializers import MecanicoSerializer, ClienteSerializer, FornecedorSerializer, AdministradorSerializer
 
 
 def cadastrar_mecanico(request):
@@ -171,3 +171,8 @@ class FornecedorViewSet(viewsets.ModelViewSet):
         if self.request.method == 'POST':
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
+
+class AdministradorViewSet(viewsets.ModelViewSet):
+    queryset = Administrador.objects.all()
+    serializer_class = AdministradorSerializer
+    permission_classes = [IsAuthenticated]

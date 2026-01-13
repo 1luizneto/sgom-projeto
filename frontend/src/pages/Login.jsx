@@ -14,13 +14,13 @@ function Login() {
 
     try {
       // Envia os dados para o backend
-      const response = await api.post('token/', { 
-        username: username, 
-        password: password 
+      const response = await api.post('token/', {
+        username: username,
+        password: password
       });
 
       // Extrai os dados da resposta
-      const { access, refresh, is_mecanico, user_name, is_cliente } = response.data;
+      const { access, refresh, is_mecanico, user_name, is_cliente, is_admin } = response.data;
 
       // Salva no LocalStorage
       localStorage.setItem('token', access);
@@ -34,9 +34,13 @@ function Login() {
       if (is_mecanico) {
         console.log("Login: Mecânico detectado.");
         navigate('/dashboard');
-      } else if (is_cliente){
+      } else if (is_cliente) {
         console.log("Login: Cliente detectado.");
-        navigate('/home'); 
+        navigate('/home');
+      }
+      else if (is_admin) {
+        console.log("Login: Admin detectado.");
+        navigate('/dashboard-admin');
       }
       else {
         navigate('/fornecedor');
@@ -58,7 +62,7 @@ function Login() {
         <h2 className="mb-6 text-center text-2xl font-bold text-gray-800">
           Entrar na Oficina
         </h2>
-        
+
         {error && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded text-sm text-center font-bold">
             {error}
@@ -103,11 +107,11 @@ function Login() {
             </button>
           </div>
         </form>
-        
+
         <div className="mt-4 text-center">
-            <a href="/cadastro" className="text-sm text-blue-600 hover:underline">
-                Não tem conta? Cadastre-se
-            </a>
+          <a href="/cadastro" className="text-sm text-blue-600 hover:underline">
+            Não tem conta? Cadastre-se
+          </a>
         </div>
       </div>
     </div>

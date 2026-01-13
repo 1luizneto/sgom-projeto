@@ -1,14 +1,16 @@
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import F
 
 # Importação explícita de todos os modelos necessários
-from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico, Produto, Notificacao
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer, OrdemServicoSerializer, NotificacaoSerializer
+from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico, Produto, Notificacao, MovimentacaoEstoque
+
+from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer, OrdemServicoSerializer, NotificacaoSerializer, MovimentacaoEstoqueSerializer
+
 from usuarios.models import Fornecedor
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
@@ -275,4 +277,43 @@ class NotificacaoViewSet(viewsets.ModelViewSet):
         notificacao.lida = True
         notificacao.save()
         return Response({'status': 'notificacao marcada como lida'})
-        return queryset.order_by('-data_abertura')
+
+class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para Movimentações de Estoque (PB11)
+    - Admin pode registrar ENTRADA manual
+    - SAÍDA é automática via Venda/OS (mas também pode ser manual)
+    """
+    queryset = MovimentacaoEstoque.objects.all()
+    serializer_class = MovimentacaoEstoqueSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = MovimentacaoEstoque.objects.select_related('produto', 'venda', 'ordem_servico')
+        
+        # Filtrar por produto
+        produto_id = self.request.query_params.get('produto', None)
+        if produto_id:
+            queryset = queryset.filter(produto__id_produto=produto_id)
+        
+        # Filtrar por tipo
+        tipo = self.request.query_params.get('tipo', None)
+        if tipo:
+            queryset = queryset.filter(tipo_movimentacao=tipo)
+        
+        # Filtrar por período
+        data_inicio = self.request.query_params.get('data_inicio', None)
+        data_fim = self.request.query_params.get('data_fim', None)
+        
+        if data_inicio:
+            queryset = queryset.filter(data_movimentacao__gte=data_inicio)
+        if data_fim:
+            queryset = queryset.filter(data_movimentacao__lte=data_fim)
+        
+        return queryset.order_by('-data_movimentacao')
+
+    def get_permissions(self):
+        """Apenas Admin pode criar ENTRADA manual"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAdminUser()]
+        return [IsAuthenticated()]

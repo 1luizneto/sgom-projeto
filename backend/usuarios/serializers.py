@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
-from .models import Mecanico, Cliente, Fornecedor
+from .models import Mecanico, Cliente, Fornecedor, Administrador
 
 class MecanicoSerializer(serializers.ModelSerializer):
     cpf = serializers.CharField(
@@ -94,7 +94,8 @@ class ClienteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Cliente
-        fields = ['id_cliente', 'nome', 'cpf', 'telefone', 'email', 'endereco', 'password']
+        fields = ['id_cliente', 'nome', 'cpf', 'telefone', 'email', 'endereco', 'password'
+        ]
         extra_kwargs = {
             'nome': {
                 'required': True,
@@ -166,19 +167,44 @@ class FornecedorSerializer(serializers.ModelSerializer):
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Gera o token padrão (access e refresh)
         data = super().validate(attrs)
+        user = self.user
 
-        # ADICIONA DADOS EXTRAS NA RESPOSTA DO LOGIN
-        # Verifica se existe um perfil de Mecânico vinculado a este usuário
-        is_mecanico = Mecanico.objects.filter(user=self.user).exists()
+        # Inicializa flags
+        is_mecanico = False
+        is_cliente = False
+        is_fornecedor = False
+        is_admin = False
+        user_name = user.username
+
+        # Verifica tipo de usuário
+        if user.is_staff or user.is_superuser:  # <--- VERIFICAR ADMIN PRIMEIRO
+            is_admin = True
+            if hasattr(user, 'administrador'):
+                user_name = user.administrador.nome
+            else:
+                user_name = user.username
+        elif hasattr(user, 'mecanico'):
+            is_mecanico = True
+            user_name = user.mecanico.nome
+        elif hasattr(user, 'cliente'):
+            is_cliente = True
+            user_name = user.cliente.nome
+        elif hasattr(user, 'fornecedor'):
+            is_fornecedor = True
+            user_name = user.fornecedor.nome
+
+        # Adiciona ao payload
         data['is_mecanico'] = is_mecanico
-        
-        # Verifica se é cliente (opcional, mas bom ter)
-        is_cliente = Cliente.objects.filter(user=self.user).exists()
         data['is_cliente'] = is_cliente
+        data['is_fornecedor'] = is_fornecedor
+        data['is_admin'] = is_admin  # <--- ADICIONE
+        data['user_name'] = user_name
 
-        # Envia o nome do usuário para mostrar na tela depois
-        data['username'] = self.user.username
-        
         return data
+
+class AdministradorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Administrador
+        fields = ['id_admin', 'nome', 'email', 'telefone']
+        read_only_fields = ['id_admin']

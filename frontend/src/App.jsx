@@ -4,6 +4,7 @@ import DashboardMecanico from './pages/DashboardMecanico';
 import CadastroUnificado from './pages/CadastroUnificado';
 import HomeCliente from './pages/HomeCliente';
 import DashboardFornecedor from './pages/DashboardFornecedor';
+import DashboardAdmin from './pages/DashboardAdmin';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
         <Route path="/cadastro" element={<CadastroUnificado />} />
 
         <Route path="/fornecedor" element={<DashboardFornecedor />} />
+        <Route path="/dashboard-admin" element={<DashboardAdmin />} />
       </Routes>
     </BrowserRouter>
   );

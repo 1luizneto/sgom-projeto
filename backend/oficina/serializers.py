@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico, Notificacao
+from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico, Notificacao, MovimentacaoEstoque
 from veiculos.models import Servico
 from usuarios.models import Fornecedor
 
@@ -83,27 +83,39 @@ class VendaSerializer(serializers.ModelSerializer):
         fields = ['id_venda', 'data_venda', 'total', 'itens']
         read_only_fields = ['total', 'data_venda']
 
+    def validate_itens(self, value):
+        if not value or len(value) == 0:
+            raise serializers.ValidationError("A venda deve conter pelo menos um item.")
+        return value
+
     def create(self, validated_data):
         itens_data = validated_data.pop('itens')
         venda = Venda.objects.create(total=0)
         
         total_venda = 0
+        
         for item_data in itens_data:
             produto = item_data['produto']
             quantidade = item_data['quantidade']
             valor_unitario = item_data['valor_unitario']
             
-            # Validação de Estoque
+            # Validação de Estoque (TC07 - Cenário 2)
             if produto.estoque_atual < quantidade:
                 raise serializers.ValidationError(
-                    f"Estoque insuficiente para {produto.nome} (Disponível: {produto.estoque_atual})"
+                    f"Quantidade solicitada superior ao estoque disponível para {produto.nome} (Atual: {produto.estoque_atual})"
                 )
             
-            # Atualiza estoque
-            produto.estoque_atual -= quantidade
-            produto.save()
+            # ✅ REGISTRA A SAÍDA NO HISTÓRICO (PB11)
+            MovimentacaoEstoque.objects.create(
+                produto=produto,
+                tipo_movimentacao='SAIDA',
+                quantidade=quantidade,
+                observacao=f'Venda Balcão #{venda.id_venda}',
+                venda=venda
+            )
+            # O método save() do MovimentacaoEstoque já abate o estoque automaticamente
             
-            # Cria item
+            # Cria item da venda
             item_venda = ItemVenda.objects.create(
                 venda=venda,
                 produto=produto,
@@ -111,7 +123,7 @@ class VendaSerializer(serializers.ModelSerializer):
                 valor_unitario=valor_unitario
             )
             total_venda += item_venda.subtotal
-            
+        
         venda.total = total_venda
         venda.save()
         
@@ -219,3 +231,28 @@ class NotificacaoSerializer(serializers.ModelSerializer):
         model = Notificacao
         fields = ['id_notificacao', 'mensagem', 'produto', 'produto_nome', 'lida', 'data_criacao']
         read_only_fields = ['data_criacao']
+
+class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
+    produto_nome = serializers.ReadOnlyField(source='produto.nome')
+
+    class Meta:
+        model = MovimentacaoEstoque
+        fields = [
+            'id_movimentacao', 'produto', 'produto_nome', 'tipo_movimentacao', 
+            'quantidade', 'custo_unitario', 'data_movimentacao', 'observacao',
+            'venda', 'ordem_servico'
+        ]
+        read_only_fields = ['data_movimentacao', 'venda', 'ordem_servico']
+
+    def validate(self, data):
+        """Valida estoque antes de registrar saída"""
+        if data.get('tipo_movimentacao') == 'SAIDA':
+            produto = data['produto']
+            quantidade = data['quantidade']
+            
+            if produto.estoque_atual < quantidade:
+                raise serializers.ValidationError(
+                    f"Estoque insuficiente para {produto.nome}. Disponível: {produto.estoque_atual}"
+                )
+        
+        return data

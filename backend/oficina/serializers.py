@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico
+from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico, Notificacao
 from veiculos.models import Servico
 from usuarios.models import Fornecedor
 
@@ -96,13 +96,13 @@ class VendaSerializer(serializers.ModelSerializer):
             quantidade = item_data['quantidade']
             
             # Validação de Estoque (Requisito: impedir venda se estoque insuficiente)
-            if produto.qtd_estoque < quantidade:
+            if produto.estoque_atual < quantidade:
                 raise serializers.ValidationError(
-                    f"Quantidade solicitada superior ao estoque disponível para o produto {produto.nome} (Atual: {produto.qtd_estoque})"
+                    f"Quantidade solicitada superior ao estoque disponível para o produto {produto.nome} (Atual: {produto.estoque_atual})"
                 )
             
             # Atualiza estoque
-            produto.qtd_estoque -= quantidade
+            produto.estoque_atual -= quantidade
             produto.save()
             
             # Cria item
@@ -177,11 +177,42 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     veiculo_placa = serializers.ReadOnlyField(source='veiculo.placa')
     mecanico_nome = serializers.ReadOnlyField(source='mecanico_responsavel.nome')
     
+    # Novos campos para o cliente
+    status_cliente = serializers.SerializerMethodField()
+    descricao_status = serializers.SerializerMethodField()
+    
     class Meta:
         model = OrdemServico
         fields = [
             'id_os', 'numero_os', 'data_abertura', 'data_conclusao', 
             'status', 'orcamento', 'veiculo', 'veiculo_modelo', 
-            'veiculo_placa', 'mecanico_responsavel', 'mecanico_nome'
+            'veiculo_placa', 'mecanico_responsavel', 'mecanico_nome',
+            'status_cliente', 'descricao_status'
         ]
         read_only_fields = ['data_abertura']
+
+    def get_status_cliente(self, obj):
+        mapping = {
+            'EM_ANDAMENTO': 'Em Manutenção',
+            'AGUARDANDO_PECAS': 'Parado - Aguardando Peças',
+            'CONCLUIDA': 'Pronto para Retirada',
+            'CANCELADA': 'Cancelado'
+        }
+        return mapping.get(obj.status, obj.status)
+
+    def get_descricao_status(self, obj):
+        mapping = {
+            'EM_ANDAMENTO': 'Mecânico trabalhando no veículo',
+            'AGUARDANDO_PECAS': 'Aguardando chegada de peças para continuar',
+            'CONCLUIDA': 'O serviço foi finalizado e o veículo pode ser retirado.',
+            'CANCELADA': 'O serviço foi cancelado.'
+        }
+        return mapping.get(obj.status, '')
+
+class NotificacaoSerializer(serializers.ModelSerializer):
+    produto_nome = serializers.ReadOnlyField(source='produto.nome')
+    
+    class Meta:
+        model = Notificacao
+        fields = ['id_notificacao', 'mensagem', 'produto', 'produto_nome', 'lida', 'data_criacao']
+        read_only_fields = ['data_criacao']

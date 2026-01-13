@@ -224,7 +224,14 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         Ex: /api/ordens-servico/?veiculo=1&status=EM_ANDAMENTO
         """
         queryset = OrdemServico.objects.all()
+        user = self.request.user
         
+        # Access Control: Clients can only see their own OS
+        if not user.is_staff:
+             # Assumes user is a Client user (linked via Cliente model)
+             # Cliente <-> User is OneToOne
+             queryset = queryset.filter(veiculo__cliente__user=user)
+
         veiculo_id = self.request.query_params.get('veiculo', None)
         status = self.request.query_params.get('status', None)
         

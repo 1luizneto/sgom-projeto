@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import axios from 'axios';
 
 function CadastroUnificado() {
   const [tipoUsuario, setTipoUsuario] = useState('');
@@ -29,31 +30,71 @@ function CadastroUnificado() {
     setFormData({});
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMsg('');
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setMsg('');
 
-    let endpoint = '';
-    if (tipoUsuario === 'mecanico') endpoint = 'mecanicos/';
-    else if (tipoUsuario === 'cliente') endpoint = 'clientes/';
-    else if (tipoUsuario === 'fornecedor') endpoint = 'fornecedores/';
-    else if (tipoUsuario === 'gerente') endpoint = 'gerentes/';
+ // delete api.defaults.headers.common['Authorization'];
 
-    if (!endpoint) return;
+  let endpoint = '';
+  let payload = {};
 
-    try {
-      await api.post(endpoint, formData);
-      alert(`${tipoUsuario.charAt(0).toUpperCase() + tipoUsuario.slice(1)} cadastrado com sucesso!`);
-      navigate('/');
-    } catch (err) {
-      console.error(err);
-      if (err.response && err.response.data) {
-        setMsg(`Erro: ${JSON.stringify(err.response.data)}`);
-      } else {
-        setMsg('Erro ao cadastrar.');
-      }
+  if (tipoUsuario === 'mecanico') {
+    endpoint = 'mecanicos/';
+    payload = {
+      nome: formData.nome,
+      cpf: formData.cpf,
+      email: formData.email,
+      telefone: formData.telefone,
+      endereco: formData.endereco,
+      password: formData.password 
+    };
+  } else if (tipoUsuario === 'cliente') {
+    endpoint = 'clientes/';
+    payload = {
+      nome: formData.nome,
+      cpf: formData.cpf,
+      email: formData.email,
+      telefone: formData.telefone,
+      endereco: formData.endereco,
+      password: formData.password
+    };
+  } else if (tipoUsuario === 'fornecedor') {
+    endpoint = 'fornecedores/';
+    payload = {
+      nome: formData.nome,
+      cnpj: formData.cnpj,
+      telefone: formData.telefone,
+      email: formData.email || '',
+      endereco: formData.endereco,
+      password: formData.password
+    };
+  }
+
+  if (!endpoint) return;
+
+  // LOG PARA DEBUG - REMOVA DEPOIS
+  console.log('Enviando payload:', payload);
+
+  try {
+    
+    const response = await axios.post(
+      `http://127.0.0.1:8000/api/${endpoint}`,
+      payload
+    );
+    console.log('Resposta:', response.data); // <--- Debug
+    alert(`${tipoUsuario.charAt(0).toUpperCase() + tipoUsuario.slice(1)} cadastrado com sucesso!`);
+    navigate('/');
+  } catch (err) {
+    console.error('Erro completo:', err);
+    if (err.response && err.response.data) {
+      console.error('Detalhes do erro:', err.response.data); // <--- Debug
+      setMsg(`Erro: ${JSON.stringify(err.response.data)}`);
+    } else {
+      setMsg('Erro ao cadastrar.');
     }
-  };
+  }
+};
 
   // --- 2. RENDERIZAÇÃO DOS CAMPOS ---
   const renderCampos = () => {

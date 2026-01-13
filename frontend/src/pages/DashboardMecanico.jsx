@@ -11,12 +11,14 @@ function DashboardMecanico() {
   const [clientes, setClientes] = useState([]);
   const [mecanicos, setMecanicos] = useState([]);
   const [veiculosDoCliente, setVeiculosDoCliente] = useState([]);
+  const [produtos, setProdutos] = useState([]); // <--- NOVO: Lista de produtos
 
   // --- CONTROLE DOS MODAIS ---
   const [mostrarModalVeiculo, setMostrarModalVeiculo] = useState(false);
   const [mostrarModalAgendamento, setMostrarModalAgendamento] = useState(false);
   const [mostrarModalOrcamento, setMostrarModalOrcamento] = useState(false);
-  const [mostrarModalChecklist, setMostrarModalChecklist] = useState(false); // <--- NOVO
+  const [mostrarModalChecklist, setMostrarModalChecklist] = useState(false);
+  const [mostrarModalVendaBalcao, setMostrarModalVendaBalcao] = useState(false); // <--- NOVO
 
   // --- FORMULÁRIOS ---
   const [novoAgendamento, setNovoAgendamento] = useState({ cliente: '', veiculo: '', servico: '', horario_inicio: '', preco: '', mecanico: '' });
@@ -34,9 +36,8 @@ function DashboardMecanico() {
     id_agendamento_origem: null
   });
 
-  // --- NOVO: Estado do Check List ---
   const [novoChecklist, setNovoChecklist] = useState({
-    os: null, // Será preenchido ao abrir modal (precisa de OS criada)
+    os: null,
     nivel_combustivel: '',
     avarias_lataria: '',
     pneus_estado: 'Bom estado',
@@ -44,7 +45,13 @@ function DashboardMecanico() {
     observacoes: ''
   });
 
-  const [osAtual, setOsAtual] = useState(null); // Para vincular o checklist
+  const [osAtual, setOsAtual] = useState(null);
+
+  // --- NOVO: Estado da Venda Balcão (PB07) ---
+  const [carrinhoVenda, setCarrinhoVenda] = useState([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState('');
+  const [quantidadeVenda, setQuantidadeVenda] = useState(1);
+  const [buscaProduto, setBuscaProduto] = useState('');
 
   // 1. Verificação de Token
   useEffect(() => {
@@ -68,12 +75,17 @@ function DashboardMecanico() {
   const carregarDadosIniciais = async () => {
     try {
       const resp = await Promise.all([
-        api.get('agendamentos/'), api.get('servicos/'), api.get('clientes/'), api.get('mecanicos/')
+        api.get('agendamentos/'),
+        api.get('servicos/'),
+        api.get('clientes/'),
+        api.get('mecanicos/'),
+        api.get('produtos/')  // <--- NOVO: Carregar produtos
       ]);
       setAgendamentos(resp[0].data);
       setServicos(resp[1].data);
       setClientes(resp[2].data);
       setMecanicos(resp[3].data || []);
+      setProdutos(resp[4].data || []); // <--- NOVO
 
       const user = localStorage.getItem('user_name');
       const eu = resp[3].data?.find(m => m.nome === user || m.user?.username === user);
@@ -103,14 +115,8 @@ function DashboardMecanico() {
     setMostrarModalOrcamento(true);
   };
 
-  // --- NOVO: Abrir Modal de Check List ---
   const abrirModalChecklist = async (agendamento) => {
-    // Primeiro verifica se já existe uma OS para este agendamento
-    // Se não, cria uma OS temporária (ou você pode criar só após salvar o checklist)
-    // Vamos simplificar: o checklist precisa de uma OS, então vamos criar a OS automaticamente
-
     try {
-      // Cria a OS primeiro (se não existir)
       const ano = new Date().getFullYear();
       const numeroOS = `OS-${ano}-${agendamento.id_agendamento}`;
 
@@ -147,7 +153,6 @@ function DashboardMecanico() {
   const handleSalvarChecklist = async (e) => {
     e.preventDefault();
 
-    // TC13 - Cenário 2: Validação de campos obrigatórios
     if (!novoChecklist.possivel_defeito.trim()) {
       alert("É necessário informar o defeito relatado.");
       return;
@@ -168,7 +173,7 @@ function DashboardMecanico() {
       };
 
       await api.post('checklists/', payload);
-      alert('Check List de entrada salvo com sucesso!'); // TC13 - Cenário 1
+      alert('Check List de entrada salvo com sucesso!');
       setMostrarModalChecklist(false);
       carregarDadosIniciais();
 
@@ -250,6 +255,113 @@ function DashboardMecanico() {
     }
   };
 
+  // --- NOVO: Funções de Venda Balcão (PB07) ---
+
+  const abrirModalVendaBalcao = () => {
+    setCarrinhoVenda([]);
+    setProdutoSelecionado('');
+    setQuantidadeVenda(1);
+    setBuscaProduto('');
+    setMostrarModalVendaBalcao(true);
+  };
+
+  const adicionarProdutoCarrinho = () => {
+    if (!produtoSelecionado) {
+      alert('Selecione um produto.');
+      return;
+    }
+
+    const produto = produtos.find(p => p.id_produto === parseInt(produtoSelecionado));
+
+    if (!produto) {
+      alert('Produto não encontrado.');
+      return;
+    }
+
+    if (quantidadeVenda > produto.estoque_atual) {
+      alert(`Quantidade solicitada superior ao estoque disponível (Atual: ${produto.estoque_atual})`);
+      return;
+    }
+
+    const itemExistente = carrinhoVenda.find(item => item.produto.id_produto === produto.id_produto);
+
+    if (itemExistente) {
+      const novaQtd = itemExistente.quantidade + quantidadeVenda;
+
+      if (novaQtd > produto.estoque_atual) {
+        alert(`Quantidade total no carrinho (${novaQtd}) superior ao estoque disponível (${produto.estoque_atual})`);
+        return;
+      }
+
+      setCarrinhoVenda(carrinhoVenda.map(item =>
+        item.produto.id_produto === produto.id_produto
+          ? { ...item, quantidade: novaQtd }
+          : item
+      ));
+    } else {
+      setCarrinhoVenda([...carrinhoVenda, {
+        produto,
+        quantidade: quantidadeVenda
+      }]);
+    }
+
+    setProdutoSelecionado('');
+    setQuantidadeVenda(1);
+  };
+
+  const removerDoCarrinho = (idProduto) => {
+    setCarrinhoVenda(carrinhoVenda.filter(item => item.produto.id_produto !== idProduto));
+  };
+
+  const calcularTotal = () => {
+    return carrinhoVenda.reduce((total, item) =>
+      total + (parseFloat(item.produto.preco_venda) * item.quantidade), 0
+    ).toFixed(2);
+  };
+
+  const finalizarVenda = async () => {
+    if (carrinhoVenda.length === 0) {
+      alert('Adicione pelo menos um produto ao carrinho.');
+      return;
+    }
+
+    try {
+      const payload = {
+        itens: carrinhoVenda.map(item => ({
+          produto: item.produto.id_produto,
+          quantidade: item.quantidade,
+          valor_unitario: parseFloat(item.produto.preco_venda)
+        })),
+        //valor_total: parseFloat(calcularTotal())
+      };
+
+      console.log('oPayload da venda:', JSON.stringify(payload, null, 2)); // <--- LOG DETALHADO
+
+      await api.post('vendas/', payload);
+
+      alert('Venda realizada com sucesso!');
+      setMostrarModalVendaBalcao(false);
+      carregarDadosIniciais();
+
+    } catch (err) {
+      console.error(' Erro completo:', err);
+      console.error('Resposta do servidor:', err.response?.data); // <--- LOG DO ERRO
+
+      if (err.response?.data) {
+        // Formata melhor a mensagem de erro
+        const erros = JSON.stringify(err.response.data, null, 2);
+        alert(`Erro ao finalizar venda:\n\n${erros}`);
+      } else {
+        alert('Erro ao processar venda.');
+      }
+    }
+  };
+
+  const produtosFiltrados = produtos.filter(p =>
+    p.nome.toLowerCase().includes(buscaProduto.toLowerCase()) ||
+    p.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
+  );
+
   const handleLogout = () => { localStorage.removeItem('token'); navigate('/'); };
   const hoje = new Date().toLocaleDateString('pt-BR');
   const agendamentosHoje = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje);
@@ -262,6 +374,7 @@ function DashboardMecanico() {
         <div className="flex gap-4">
           <button onClick={() => setMostrarModalVeiculo(true)} className="btn bg-indigo-50 text-indigo-700">+ Veículo</button>
           <button onClick={() => setMostrarModalAgendamento(true)} className="btn bg-blue-600 text-white shadow-lg">+ Novo Agendamento</button>
+          <button onClick={abrirModalVendaBalcao} className="btn bg-green-600 text-white shadow-lg">💰 Venda Balcão</button>
           <button onClick={handleLogout} className="text-gray-400 font-bold ml-4">Sair</button>
         </div>
       </nav>
@@ -275,7 +388,7 @@ function DashboardMecanico() {
                 key={ag.id_agendamento}
                 agendamento={ag}
                 aoClicarGerarOS={() => abrirModalOS(ag)}
-                aoClicarChecklist={() => abrirModalChecklist(ag)} // <--- NOVO
+                aoClicarChecklist={() => abrirModalChecklist(ag)}
               />
             ))}
             {agendamentosHoje.length === 0 && <p className="text-gray-400">Vazio.</p>}
@@ -301,7 +414,121 @@ function DashboardMecanico() {
         </section>
       </main>
 
-      {/* --- MODAIS --- */}
+      {/* MODAL VENDA BALCÃO - NOVO (PB07) */}
+      {mostrarModalVendaBalcao && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl relative max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setMostrarModalVendaBalcao(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+
+            <h2 className="text-2xl font-bold mb-6 text-green-700">💰 Venda Balcão</h2>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* PAINEL ESQUERDO: Adicionar Produtos */}
+              <div className="bg-gray-50 p-4 rounded-lg border">
+                <h3 className="font-bold text-gray-700 mb-4">Adicionar Produto</h3>
+
+                <input
+                  type="text"
+                  placeholder="🔍 Buscar produto por nome..."
+                  className="w-full p-3 border rounded-lg mb-3"
+                  value={buscaProduto}
+                  onChange={e => setBuscaProduto(e.target.value)}
+                />
+
+                <select
+                  className="w-full p-3 border rounded-lg mb-3"
+                  value={produtoSelecionado}
+                  onChange={e => setProdutoSelecionado(e.target.value)}
+                >
+                  <option value="">Selecione o produto...</option>
+                  {produtosFiltrados.map(p => (
+                    <option key={p.id_produto} value={p.id_produto}>
+                      {p.nome} - R$ {parseFloat(p.preco_venda).toFixed(2)} (Estoque: {p.estoque_atual})
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex gap-3 mb-4">
+                  <div className="flex-1">
+                    <label className="text-sm font-bold text-gray-600">Quantidade</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="w-full p-3 border rounded-lg mt-1"
+                      value={quantidadeVenda}
+                      onChange={e => setQuantidadeVenda(parseInt(e.target.value) || 1)}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={adicionarProdutoCarrinho}
+                      className="bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700"
+                    >
+                      + Adicionar
+                    </button>
+                  </div>
+                </div>
+
+                {produtoSelecionado && produtos.find(p => p.id_produto === parseInt(produtoSelecionado)) && (
+                  <div className="bg-blue-50 p-3 rounded border border-blue-200 text-sm">
+                    <p><strong>Produto:</strong> {produtos.find(p => p.id_produto === parseInt(produtoSelecionado)).nome}</p>
+                    <p><strong>Estoque Disponível:</strong> {produtos.find(p => p.id_produto === parseInt(produtoSelecionado)).estoque_atual} un.</p>
+                    <p><strong>Preço Unitário:</strong> R$ {parseFloat(produtos.find(p => p.id_produto === parseInt(produtoSelecionado)).preco_venda).toFixed(2)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* PAINEL DIREITO: Carrinho */}
+              <div className="bg-white border rounded-lg p-4">
+                <h3 className="font-bold text-gray-700 mb-4">🛒 Carrinho ({carrinhoVenda.length} itens)</h3>
+
+                {carrinhoVenda.length === 0 ? (
+                  <p className="text-gray-400 text-center py-8">Carrinho vazio</p>
+                ) : (
+                  <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
+                    {carrinhoVenda.map(item => (
+                      <div key={item.produto.id_produto} className="flex justify-between items-center bg-gray-50 p-3 rounded border">
+                        <div className="flex-1">
+                          <p className="font-bold text-gray-800">{item.produto.nome}</p>
+                          <p className="text-sm text-gray-600">
+                            {item.quantidade} x R$ {parseFloat(item.produto.preco_venda).toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-green-600">
+                            R$ {(parseFloat(item.produto.preco_venda) * item.quantidade).toFixed(2)}
+                          </span>
+                          <button
+                            onClick={() => removerDoCarrinho(item.produto.id_produto)}
+                            className="text-red-500 hover:text-red-700 font-bold"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="border-t pt-4 mt-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-lg font-bold text-gray-700">TOTAL:</span>
+                    <span className="text-3xl font-bold text-green-600">R$ {calcularTotal()}</span>
+                  </div>
+
+                  <button
+                    onClick={finalizarVenda}
+                    disabled={carrinhoVenda.length === 0}
+                    className="w-full bg-green-600 text-white font-bold py-4 rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg"
+                  >
+                    ✅ Finalizar Venda
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL CHECK LIST (NOVO) - PB13 */}
       {mostrarModalChecklist && (

@@ -2,15 +2,18 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
-from django.utils import timezone
-from django.db import transaction
-from django.db.models import F
-
-# Importação explícita de todos os modelos necessários
-from .models import Orcamento, ItemMovimentacao, OrdemServico, Venda, Checklist, LaudoTecnico, Produto, Notificacao, MovimentacaoEstoque
-
-from .serializers import OrcamentoSerializer, ItemMovimentacaoSerializer, VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer, ProdutoSerializer, OrdemServicoSerializer, NotificacaoSerializer, MovimentacaoEstoqueSerializer
-
+from django.db import models  # <--- ADICIONE ESTA LINHA
+from .models import (
+    Orcamento, ItemMovimentacao, Venda, ItemVenda, 
+    Checklist, LaudoTecnico, Produto, OrdemServico, 
+    Notificacao, MovimentacaoEstoque
+)
+from .serializers import (
+    OrcamentoSerializer, ItemMovimentacaoSerializer, 
+    VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer,
+    ProdutoSerializer, OrdemServicoSerializer, NotificacaoSerializer,
+    MovimentacaoEstoqueSerializer
+)
 from usuarios.models import Fornecedor
 
 class OrcamentoViewSet(viewsets.ModelViewSet):
@@ -53,40 +56,43 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def aprovar(self, request, pk=None):
-        """
-        PB09 - Aprova o orçamento e gera a Ordem de Serviço (OS).
-        """
+        """Aprovar orçamento e criar Ordem de Serviço (PB08)"""
         orcamento = self.get_object()
 
-        # Validação: Cenário 3 (Já processado)
-        if orcamento.status in ['APROVADO', 'REJEITADO']:
+        if orcamento.status != 'PENDENTE':
             return Response(
-                {"erro": "Este orçamento já foi processado anteriormente."},
+                {'erro': 'Orçamento já foi aprovado ou rejeitado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Atualiza Status
-        orcamento.status = 'APROVADO'
-        orcamento.save()
+        # Gerar número único de OS
+        ultimo_numero = OrdemServico.objects.aggregate(models.Max('numero_os'))['numero_os__max']
+        if ultimo_numero is None:
+            numero_os_gerado = 1
+        else:
+            try:
+                numero_os_gerado = int(ultimo_numero) + 1
+            except ValueError:
+                numero_os_gerado = 1
 
-        # Geração da OS (Cenário 1)
-        # Gera um número de OS simples: OS-{ANO}-{ID_ORCAMENTO}
-        ano_atual = timezone.now().year
-        numero_os_gerado = f"OS-{ano_atual}-{orcamento.pk}"
-
-        # Criação da OS usando o modelo importado
-        OrdemServico.objects.create(
-            numero_os=numero_os_gerado,
+        # Criar OS
+        ordem_servico = OrdemServico.objects.create(
+            numero_os=str(numero_os_gerado),
             orcamento=orcamento,
             veiculo=orcamento.veiculo,
             mecanico_responsavel=orcamento.mecanico,
             status='EM_ANDAMENTO'
         )
 
-        # Notificação (Simulada conforme requisito)
-        # notificar_mecanico(orcamento.mecanico, "Nova OS aberta!")
+        # Atualizar status do orçamento
+        orcamento.status = 'APROVADO'
+        orcamento.save()
 
-        return Response({"mensagem": "Orçamento aprovado e OS gerada com sucesso."}, status=status.HTTP_200_OK)
+        return Response({
+            'mensagem': 'Orçamento aprovado com sucesso',
+            'numero_os': ordem_servico.numero_os,
+            'id_os': ordem_servico.id_os
+        })
 
     @action(detail=True, methods=['post'])
     def rejeitar(self, request, pk=None):

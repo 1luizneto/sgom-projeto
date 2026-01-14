@@ -2,6 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from usuarios.models import Fornecedor
+from decimal import Decimal
 
 # --- Produto (Estoque) ---
 class Produto(models.Model):
@@ -35,7 +36,7 @@ class Orcamento(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     validade = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
-    valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    descricao = models.TextField(blank=True, null=True)  # <--- ADICIONE
     
     # Referências cruzadas entre apps
     cliente = models.ForeignKey('usuarios.Cliente', on_delete=models.CASCADE)
@@ -44,6 +45,18 @@ class Orcamento(models.Model):
 
     def __str__(self):
         return f"Orçamento #{self.id_orcamento}"
+
+    def calcular_total(self):
+        """Calcula o valor total do orçamento baseado nos itens"""  
+        total = self.itens.aggregate(
+            total=models.Sum(models.F('quantidade') * models.F('valor_unitario'))
+        )['total']
+        return total or Decimal('0.00')
+
+    @property
+    def valor_total(self):
+        """Propriedade que retorna o valor total calculado"""
+        return self.calcular_total()
 
 # --- Ordem de Serviço (OS) ---
 class OrdemServico(models.Model):

@@ -148,7 +148,7 @@ const handleSubmit = async (e) => {
       );
     }
 
-    // Campos comuns para Cliente/Mecanico/Gerente
+    // Campos comuns para Cliente/Mecanico
     return (
       <>
         <input name="nome" placeholder="Nome Completo" onChange={handleChange} className="w-full mb-3 px-3 py-2 border rounded" required />
@@ -175,7 +175,6 @@ const handleSubmit = async (e) => {
               <option value="cliente">Cliente</option>
               <option value="mecanico">Mecânico</option>
               <option value="fornecedor">Fornecedor</option>
-              <option value="gerente">Gerente</option>
             </select>
           </div>
           <button onClick={handleAvancar} disabled={!tipoUsuario} className={`w-full font-bold py-2 px-4 rounded transition duration-300 ${tipoUsuario ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>Continuar</button>

@@ -81,7 +81,7 @@ class AgendamentoSerializer(serializers.ModelSerializer):
             'horario_inicio', 'horario_fim', 'preco', 'status', 'criado_em',
             'cliente_nome', 'veiculo_placa', 'veiculo_modelo', 'servico_descricao'
         ]
-        read_only_fields = ['status', 'criado_em']
+        read_only_fields = ['criado_em']
         extra_kwargs = {
             'horario_inicio': {
                 'required': True,
@@ -99,37 +99,76 @@ class AgendamentoSerializer(serializers.ModelSerializer):
             },
         }
 
+        # ✅ SOBRESCREVER O UPDATE PARA GARANTIR QUE SALVE
+    def update(self, instance, validated_data):
+        """Atualizar agendamento permitindo PATCH parcial"""
+        print(f"🔄 Atualizando agendamento #{instance.id_agendamento}")
+        print(f"📦 Dados validados: {validated_data}")
+        
+        # Atualizar cada campo fornecido
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            print(f"   ✅ {attr} = {value}")
+        
+        instance.save()
+        print(f"💾 Agendamento salvo! Novo status: {instance.status}")
+        
+        return instance
+
     def validate(self, attrs):
-        cliente = attrs.get('cliente')
-        veiculo = attrs.get('veiculo')
-        mecanico = attrs.get('mecanico')
-        servico = attrs.get('servico')
-        inicio = attrs.get('horario_inicio')
-        fim = attrs.get('horario_fim')
-        preco = attrs.get('preco')
+        # ✅ Se for apenas atualização de status, não validar nada
+        if self.instance and set(attrs.keys()) == {'status'}:
+            return attrs
 
-        # checagens básicas
-        if not all([cliente, veiculo, mecanico, servico, inicio, preco]):
-            raise serializers.ValidationError('Todos os campos obrigatórios devem ser preenchidos.')
+        # Pegar valores (existentes ou novos)
+        if self.instance is None:  # CRIAÇÃO
+            cliente = attrs.get('cliente')
+            veiculo = attrs.get('veiculo')
+            mecanico = attrs.get('mecanico')
+            servico = attrs.get('servico')
+            inicio = attrs.get('horario_inicio')
+            preco = attrs.get('preco')
+            fim = attrs.get('horario_fim')
 
-        if inicio < timezone.now():
-            raise serializers.ValidationError({'horario_inicio': ['Não é possível agendar no passado.']})
-        if fim and fim <= inicio:
-            raise serializers.ValidationError({'horario_fim': ['O fim deve ser após o início.']})
+            if not all([cliente, veiculo, mecanico, servico, inicio, preco]):
+                raise serializers.ValidationError('Todos os campos obrigatórios devem ser preenchidos.')
+        else:  # ATUALIZAÇÃO
+            cliente = attrs.get('cliente', self.instance.cliente)
+            veiculo = attrs.get('veiculo', self.instance.veiculo)
+            mecanico = attrs.get('mecanico', self.instance.mecanico)
+            servico = attrs.get('servico', self.instance.servico)
+            inicio = attrs.get('horario_inicio', self.instance.horario_inicio)
+            preco = attrs.get('preco', self.instance.preco)
+            fim = attrs.get('horario_fim', self.instance.horario_fim)
 
-        # conflito de horário para o mecânico
-        new_end = fim or (inicio + timezone.timedelta(hours=1))
-        conflitos = Agendamento.objects.filter(mecanico=mecanico).filter(
-            Q(horario_inicio__lt=new_end) & (
-                Q(horario_fim__gt=inicio) | Q(horario_fim__isnull=True, horario_inicio__lt=new_end)
+        # ✅ Validações de data/hora (APENAS se horário foi fornecido/alterado)
+        if 'horario_inicio' in attrs:
+            if inicio < timezone.now():
+                raise serializers.ValidationError({'horario_inicio': 'Não é possível agendar no passado.'})
+            
+            if fim and fim <= inicio:
+                raise serializers.ValidationError({'horario_fim': 'O fim deve ser após o início.'})
+
+            # ✅ Validar conflito de horário APENAS na criação ou se horário foi alterado
+            new_end = fim or (inicio + timezone.timedelta(hours=1))
+            
+            conflitos = Agendamento.objects.filter(mecanico=mecanico).filter(
+                Q(horario_inicio__lt=new_end) & (
+                    Q(horario_fim__gt=inicio) | Q(horario_fim__isnull=True, horario_inicio__lt=new_end)
+                )
             )
-        )
-        if conflitos.exists():
-            raise serializers.ValidationError({'horario_inicio': ['Horário já ocupado para o mecânico.']})
+            
+            # Excluir o próprio agendamento se for atualização
+            if self.instance:
+                conflitos = conflitos.exclude(id_agendamento=self.instance.id_agendamento)
+            
+            if conflitos.exists():
+                raise serializers.ValidationError({'horario_inicio': 'Horário já ocupado para o mecânico.'})
 
-        # veiculo pertence ao cliente
-        if veiculo.cliente_id != cliente.id_cliente:
-            raise serializers.ValidationError({'veiculo': ['O veículo selecionado não pertence ao cliente informado.']})
+        # ✅ Validar veículo x cliente (APENAS se veículo foi fornecido/alterado)
+        if 'veiculo' in attrs or 'cliente' in attrs:
+            if veiculo.cliente_id != cliente.id_cliente:
+                raise serializers.ValidationError({'veiculo': 'O veículo selecionado não pertence ao cliente informado.'})
 
         return attrs
 

@@ -81,7 +81,7 @@ class AgendamentoSerializer(serializers.ModelSerializer):
             'horario_inicio', 'horario_fim', 'preco', 'status', 'criado_em',
             'cliente_nome', 'veiculo_placa', 'veiculo_modelo', 'servico_descricao'
         ]
-        read_only_fields = ['status', 'criado_em']
+        read_only_fields = ['criado_em']
         extra_kwargs = {
             'horario_inicio': {
                 'required': True,
@@ -98,6 +98,22 @@ class AgendamentoSerializer(serializers.ModelSerializer):
                 }
             },
         }
+
+        # ✅ SOBRESCREVER O UPDATE PARA GARANTIR QUE SALVE
+    def update(self, instance, validated_data):
+        """Atualizar agendamento permitindo PATCH parcial"""
+        print(f"🔄 Atualizando agendamento #{instance.id_agendamento}")
+        print(f"📦 Dados validados: {validated_data}")
+        
+        # Atualizar cada campo fornecido
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            print(f"   ✅ {attr} = {value}")
+        
+        instance.save()
+        print(f"💾 Agendamento salvo! Novo status: {instance.status}")
+        
+        return instance
 
     def validate(self, attrs):
         # ✅ Se for apenas atualização de status, não validar nada

@@ -13,26 +13,63 @@ class ItemMovimentacaoSerializer(serializers.ModelSerializer):
         model = ItemMovimentacao
         fields = ['id_item', 'orcamento','produto', 'nome_produto', 'servico', 'nome_servico', 'quantidade', 'valor_unitario', 'subtotal']
 
+class ChecklistSerializer(serializers.ModelSerializer):
+    mecanico_nome = serializers.CharField(source='mecanico.nome', read_only=True)
+    agendamento_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Checklist
+        fields = '__all__'
+    
+    def get_agendamento_info(self, obj):
+        if obj.agendamento:
+            return {
+                'id': obj.agendamento.id_agendamento,
+                'cliente': obj.agendamento.cliente.nome,
+                'veiculo': obj.agendamento.veiculo.modelo,
+                'servico': obj.agendamento.servico.descricao
+            }
+        return None
+
 class OrcamentoSerializer(serializers.ModelSerializer):
     veiculo_placa = serializers.CharField(source='veiculo.placa', read_only=True)
     veiculo_modelo = serializers.CharField(source='veiculo.modelo', read_only=True)
     mecanico_nome = serializers.CharField(source='mecanico.nome', read_only=True)
     cliente_nome = serializers.CharField(source='cliente.nome', read_only=True)
     valor_total = serializers.SerializerMethodField()
+    checklist_info = serializers.SerializerMethodField()
+    agendamento_info = serializers.SerializerMethodField()
 
     class Meta:
         model = Orcamento
         fields = [
             'id_orcamento', 'veiculo', 'veiculo_placa', 'veiculo_modelo',
-            'mecanico', 'mecanico_nome', 'cliente', 'cliente_nome',  # <--- Adicione 'cliente'
+            'mecanico', 'mecanico_nome', 'cliente', 'cliente_nome',
             'descricao', 'valor_total', 'validade', 'status',
-            'data_criacao'
+            'data_criacao', 'agendamento', 'checklist',
+            'checklist_info', 'agendamento_info'
         ]
-        read_only_fields = ['data_criacao', 'valor_total', 'cliente']  # <--- cliente é read_only
+        read_only_fields = ['data_criacao', 'valor_total', 'cliente']
 
     def get_valor_total(self, obj):
         """Calcula o valor total dos itens do orçamento"""
         return obj.calcular_total()
+    
+    def get_checklist_info(self, obj):
+        if obj.checklist:
+            return {
+                'id': obj.checklist.id_checklist,
+                'defeito': obj.checklist.possivel_defeito
+            }
+        return None
+    
+    def get_agendamento_info(self, obj):
+        if obj.agendamento:
+            return {
+                'id': obj.agendamento.id_agendamento,
+                'horario': obj.agendamento.horario_inicio
+            }
+        return None
 
     def create(self, validated_data):
         """Preenche automaticamente o cliente a partir do veículo"""
@@ -134,31 +171,6 @@ class VendaSerializer(serializers.ModelSerializer):
         
         return venda
 
-class ChecklistSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Checklist
-        fields = ['id_checklist', 'os', 'nivel_combustivel', 'avarias_lataria', 'pneus_estado', 'possivel_defeito', 'observacoes', 'data_criacao', 'mecanico']
-        read_only_fields = ['data_criacao']
-
-    def validate(self, data):
-        """
-        Valida regras de negócio do Checklist.
-        """
-        # Requisito: "É necessário informar o estado do veículo e o defeito relatado"
-        if not data.get('possivel_defeito'):
-             raise serializers.ValidationError({"possivel_defeito": "É necessário informar o defeito relatado."})
-        
-        # Validar estado do veículo (pelo menos um campo de estado deve estar preenchido?)
-        # O requisito diz: "Se a quantidade de um produto solicitada..." (não, isso é venda).
-        # "Scenario: Tentativa de salvar sem descrever o defeito"
-        # "But deixo o campo 'Possível Defeito' ou 'Estado Atual' em branco"
-        # Estado Atual = Nível Combustível + Avarias + Pneus.
-        
-        if not data.get('nivel_combustivel') and not data.get('avarias_lataria') and not data.get('pneus_estado'):
-             raise serializers.ValidationError("É necessário informar o estado atual do veículo (combustível, avarias ou pneus).")
-
-        return data
-    
 class ProdutoSerializer(serializers.ModelSerializer):
     # Campo read-only para exibir o nome do fornecedor na listagem
     fornecedor_nome = serializers.ReadOnlyField(source='fornecedor.nome')

@@ -241,24 +241,49 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Permite filtrar OS por veículo ou status.
-        Ex: /api/ordens-servico/?veiculo=1&status=EM_ANDAMENTO
+        
+        Controle de Acesso:
+        - Admin: vê todas as OS
+        - Mecânico: vê apenas as OS que ele é responsável
+        - Cliente: vê apenas as OS dos seus veículos
         """
-        queryset = OrdemServico.objects.all()
+        queryset = OrdemServico.objects.select_related(
+            'veiculo', 
+            'mecanico_responsavel', 
+            'orcamento'
+        ).all()
+        
         user = self.request.user
         
-        # Access Control: Clients can only see their own OS
-        if not user.is_staff:
-             # Assumes user is a Client user (linked via Cliente model)
-             # Cliente <-> User is OneToOne
-             queryset = queryset.filter(veiculo__cliente__user=user)
+        # Admin vê tudo
+        if user.is_staff:
+            pass  # Não filtra nada
+        else:
+            # Verificar se é mecânico
+            try:
+                from usuarios.models import Mecanico
+                mecanico = Mecanico.objects.get(user=user)
+                # Mecânico vê apenas suas OS
+                queryset = queryset.filter(mecanico_responsavel=mecanico)
+            except Mecanico.DoesNotExist:
+                # Se não for mecânico, assume que é cliente
+                try:
+                    from usuarios.models import Cliente
+                    cliente = Cliente.objects.get(user=user)
+                    # Cliente vê apenas OS dos seus veículos
+                    queryset = queryset.filter(veiculo__cliente=cliente)
+                except Cliente.DoesNotExist:
+                    # Se não for nem mecânico nem cliente, retorna vazio
+                    queryset = queryset.none()
 
+        # Filtros opcionais por query params
         veiculo_id = self.request.query_params.get('veiculo', None)
-        status = self.request.query_params.get('status', None)
+        status_param = self.request.query_params.get('status', None)
         
         if veiculo_id:
             queryset = queryset.filter(veiculo__id_veiculo=veiculo_id)
-        if status:
-            queryset = queryset.filter(status=status)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
             
         return queryset.order_by('-data_abertura')
 

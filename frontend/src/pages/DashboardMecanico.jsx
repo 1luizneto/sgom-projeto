@@ -13,6 +13,9 @@ function DashboardMecanico() {
   const [veiculosDoCliente, setVeiculosDoCliente] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [notificacoes, setNotificacoes] = useState([]);
+  const [ordensServico, setOrdensServico] = useState([]);
+  const [checklists, setChecklists] = useState([]); // <--- ADICIONAR NOVO ESTADO
+  const [orcamentos, setOrcamentos] = useState([]); // ADICIONAR NOVO ESTADO para armazenar orçamentos
 
   // --- CONTROLE DOS MODAIS ---
   const [mostrarModalVeiculo, setMostrarModalVeiculo] = useState(false);
@@ -21,11 +24,15 @@ function DashboardMecanico() {
   const [mostrarModalChecklist, setMostrarModalChecklist] = useState(false);
   const [mostrarModalVendaBalcao, setMostrarModalVendaBalcao] = useState(false);
   const [mostrarModalEstoque, setMostrarModalEstoque] = useState(false);
-
-  // --- NOVO: Modal de Confirmação de Cancelamento ---
   const [mostrarModalCancelamento, setMostrarModalCancelamento] = useState(false);
-  const [agendamentoParaCancelar, setAgendamentoParaCancelar] = useState(null);
+  const [mostrarModalOS, setMostrarModalOS] = useState(false); // ADICIONAR NOVO ESTADO
 
+  // --- NOVO: Controle de fluxo ---
+  const [agendamentoAtual, setAgendamentoAtual] = useState(null);
+  const [checklistCriado, setChecklistCriado] = useState(null);
+  const [etapaFluxo, setEtapaFluxo] = useState(''); // 'checklist', 'orcamento', 'aguardando_aprovacao'
+
+  const [agendamentoParaCancelar, setAgendamentoParaCancelar] = useState(null);
   const [filtroEstoqueBaixo, setFiltroEstoqueBaixo] = useState(false);
 
   // --- FORMULÁRIOS ---
@@ -39,13 +46,17 @@ function DashboardMecanico() {
   };
 
   const [novoOrcamento, setNovoOrcamento] = useState({
-    cliente: '', veiculo: '', descricao: '', valor_total: '', status: 'PENDENTE',
+    cliente: '',
+    veiculo: '',
+    descricao: '',
+    status: 'PENDENTE',
     validade: getDataValidadePadrao(),
-    id_agendamento_origem: null
+    agendamento: null,
+    checklist: null
   });
 
   const [novoChecklist, setNovoChecklist] = useState({
-    os: null,
+    agendamento: null,
     nivel_combustivel: '',
     avarias_lataria: '',
     pneus_estado: 'Bom estado',
@@ -53,20 +64,23 @@ function DashboardMecanico() {
     observacoes: ''
   });
 
-  const [osAtual, setOsAtual] = useState(null);
+  // --- NOVO: Itens do orçamento (peças/produtos) ---
+  const [itensOrcamento, setItensOrcamento] = useState([]);
+  const [produtoOrcamento, setProdutoOrcamento] = useState('');
+  const [quantidadeOrcamento, setQuantidadeOrcamento] = useState(1);
+
   const [carrinhoVenda, setCarrinhoVenda] = useState([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState('');
   const [quantidadeVenda, setQuantidadeVenda] = useState(1);
   const [buscaProduto, setBuscaProduto] = useState('');
 
-  // 1. Verificação de Token
+  // --- USE EFFECTS ---
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) api.defaults.headers.Authorization = `Bearer ${token}`;
     else navigate('/');
   }, [navigate]);
 
-  // 2. Carregar Dados ao Abrir
   useEffect(() => { carregarDadosIniciais(); }, []);
   useEffect(() => { if (novoAgendamento.cliente) carregarVeiculos(novoAgendamento.cliente); }, [novoAgendamento.cliente]);
   useEffect(() => { if (novoOrcamento.cliente) carregarVeiculos(novoOrcamento.cliente); }, [novoOrcamento.cliente]);
@@ -76,8 +90,19 @@ function DashboardMecanico() {
       const s = servicos.find(item => item.id_servico === parseInt(novoAgendamento.servico));
       if (s) setNovoAgendamento(prev => ({ ...prev, preco: s.preco_base }));
     }
-  }, [novoAgendamento.servico]);
+  }, [novoAgendamento.servico, servicos]);
 
+  useEffect(() => {
+    if (mecanicos.length > 0) {
+      const user = localStorage.getItem('user_name');
+      const eu = mecanicos.find(m => m.nome === user || m.user?.username === user);
+      if (eu) {
+        setNovoAgendamento(prev => ({ ...prev, mecanico: eu.id_mecanico }));
+      }
+    }
+  }, [mecanicos]);
+
+  // --- CARREGAR DADOS ---
   const carregarDadosIniciais = async () => {
     try {
       const resp = await Promise.all([
@@ -86,31 +111,243 @@ function DashboardMecanico() {
         api.get('clientes/'),
         api.get('mecanicos/'),
         api.get('produtos/'),
-        api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] }))
+        api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] })),
+        api.get('ordens-servico/').catch(err => {
+          console.error('❌ Erro ao carregar OS:', err);
+          return { data: [] };
+        }),
+        api.get('checklists/').catch(() => ({ data: [] })),
+        api.get('orcamentos/').catch(() => ({ data: [] }))
       ]);
+
+      console.log('📦 DADOS CARREGADOS:');
+      console.log('Ordens de Serviço:', resp[6].data);
+      console.log('Orçamentos:', resp[8].data);
+      console.log('Checklists:', resp[7].data);
+
       setAgendamentos(resp[0].data);
       setServicos(resp[1].data);
       setClientes(resp[2].data);
       setMecanicos(resp[3].data || []);
       setProdutos(resp[4].data || []);
       setNotificacoes(resp[5].data || []);
-
-      const user = localStorage.getItem('user_name');
-      const eu = resp[3].data?.find(m => m.nome === user || m.user?.username === user);
-      if (eu) setNovoAgendamento(prev => ({ ...prev, mecanico: eu.id_mecanico }));
-    } catch (err) { if (err.response?.status === 401) navigate('/'); }
+      setOrdensServico(resp[6].data || []);
+      setChecklists(resp[7].data || []);
+      setOrcamentos(resp[8].data || []);
+    } catch (err) {
+      console.error('❌ Erro ao carregar dados:', err);
+      if (err.response?.status === 401) navigate('/');
+    }
   };
 
-  // --- NOVO: Função para solicitar cancelamento ---
+  const carregarVeiculos = async (clienteId) => {
+    try {
+      const resp = await api.get(`veiculos/?cliente=${clienteId}`);
+      const lista = Array.isArray(resp.data) ? resp.data : [];
+      setVeiculosDoCliente(lista.filter(v => v.cliente === parseInt(clienteId)));
+    } catch (err) { console.error(err); }
+  };
+
+  // --- NOVO FLUXO: Iniciar Atendimento ---
+  const iniciarFluxoAtendimento = (agendamento) => {
+    setAgendamentoAtual(agendamento);
+    setEtapaFluxo('checklist');
+
+    setNovoChecklist({
+      agendamento: agendamento.id_agendamento,
+      nivel_combustivel: '',
+      avarias_lataria: '',
+      pneus_estado: 'Bom estado',
+      possivel_defeito: '',
+      observacoes: ''
+    });
+
+    setMostrarModalChecklist(true);
+  };
+
+  // --- ETAPA 1: Salvar Checklist ---
+  const handleSalvarChecklist = async (e) => {
+    e.preventDefault();
+
+    if (!novoChecklist.possivel_defeito.trim()) {
+      alert("É necessário informar o defeito relatado.");
+      return;
+    }
+
+    try {
+      const mecId = mecanicos.find(m => m.nome === localStorage.getItem('user_name'))?.id_mecanico || mecanicos[0]?.id_mecanico;
+
+      const payload = {
+        agendamento: agendamentoAtual.id_agendamento,
+        mecanico: mecId,
+        nivel_combustivel: novoChecklist.nivel_combustivel,
+        avarias_lataria: novoChecklist.avarias_lataria,
+        pneus_estado: novoChecklist.pneus_estado,
+        possivel_defeito: novoChecklist.possivel_defeito,
+        observacoes: novoChecklist.observacoes
+      };
+
+      const response = await api.post('checklists/', payload);
+
+      alert('✅ Check List salvo! Agora crie o orçamento com as peças necessárias.');
+
+      setChecklistCriado(response.data);
+      setMostrarModalChecklist(false);
+
+      // AVANÇAR PARA PRÓXIMA ETAPA
+      setTimeout(() => {
+        abrirModalOrcamentoAposChecklist();
+      }, 500);
+
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data ? `Erro: ${JSON.stringify(err.response.data)}` : 'Erro ao salvar Check List.');
+    }
+  };
+
+  // --- ETAPA 2: Abrir modal de orçamento ---
+  const abrirModalOrcamentoAposChecklist = () => {
+    if (!agendamentoAtual || !checklistCriado) return;
+
+    carregarVeiculos(agendamentoAtual.cliente);
+
+    setNovoOrcamento({
+      cliente: agendamentoAtual.cliente,
+      veiculo: agendamentoAtual.veiculo,
+      descricao: `Serviço: ${agendamentoAtual.servico_descricao}\n\nDefeito Relatado: ${checklistCriado.possivel_defeito}`,
+      status: 'PENDENTE',
+      validade: getDataValidadePadrao(),
+      agendamento: agendamentoAtual.id_agendamento,
+      checklist: checklistCriado.id_checklist
+    });
+
+    setItensOrcamento([{
+      produto: null,
+      produto_nome: agendamentoAtual.servico_descricao,
+      quantidade: 1,
+      valor_unitario: parseFloat(agendamentoAtual.preco || 0),
+      tipo: 'servico'
+    }]);
+
+    setEtapaFluxo('orcamento');
+    setMostrarModalOrcamento(true);
+  };
+
+  // --- ADICIONAR PEÇA AO ORÇAMENTO ---
+  const adicionarItemOrcamento = () => {
+    if (!produtoOrcamento) {
+      alert('Selecione um produto/peça');
+      return;
+    }
+
+    const produto = produtos.find(p => p.id_produto === parseInt(produtoOrcamento));
+    if (!produto) return;
+
+    if (quantidadeOrcamento > produto.estoque_atual) {
+      alert(`Estoque insuficiente! Disponível: ${produto.estoque_atual}`);
+      return;
+    }
+
+    const itemExistente = itensOrcamento.find(i => i.produto === produto.id_produto);
+
+    if (itemExistente) {
+      setItensOrcamento(itensOrcamento.map(i =>
+        i.produto === produto.id_produto
+          ? { ...i, quantidade: i.quantidade + quantidadeOrcamento }
+          : i
+      ));
+    } else {
+      setItensOrcamento([...itensOrcamento, {
+        produto: produto.id_produto,
+        produto_nome: produto.nome,
+        quantidade: quantidadeOrcamento,
+        valor_unitario: parseFloat(produto.preco_venda),
+        tipo: 'produto'
+      }]);
+    }
+
+    setProdutoOrcamento('');
+    setQuantidadeOrcamento(1);
+  };
+
+  const removerItemOrcamento = (index) => {
+    setItensOrcamento(itensOrcamento.filter((_, i) => i !== index));
+  };
+
+  const calcularTotalOrcamento = () => {
+    return itensOrcamento.reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0);
+  };
+
+  // --- ETAPA 3: Criar Orçamento ---
+  const handleCriaOrcamento = async (e) => {
+    e.preventDefault();
+
+    if (itensOrcamento.length === 0) {
+      alert('Adicione pelo menos um item ao orçamento!');
+      return;
+    }
+
+    try {
+      const nomeUser = localStorage.getItem('user_name');
+      const eu = mecanicos.find(m => m.nome === nomeUser || (m.user && m.user.username === nomeUser));
+      const mecId = eu ? (eu.id_mecanico || eu.id) : (mecanicos[0]?.id_mecanico || mecanicos[0]?.id);
+
+      if (!mecId) {
+        alert("Erro: Mecânico não identificado.");
+        return;
+      }
+
+      const payload = {
+        cliente: parseInt(novoOrcamento.cliente),
+        veiculo: parseInt(novoOrcamento.veiculo),
+        descricao: novoOrcamento.descricao || "Serviço Mecânico Geral",
+        status: 'PENDENTE',
+        validade: novoOrcamento.validade,
+        mecanico: parseInt(mecId),
+        agendamento: novoOrcamento.agendamento,
+        checklist: novoOrcamento.checklist
+      };
+
+      console.log('📤 Criando orçamento:', payload);
+
+      const response = await api.post('orcamentos/', payload);
+      const orcamentoId = response.data.id_orcamento;
+
+      // Adicionar itens ao orçamento
+      for (const item of itensOrcamento) {
+        if (item.produto) {
+          await api.post('itens-movimentacao/', {
+            orcamento: orcamentoId,
+            produto: item.produto,
+            quantidade: item.quantidade,
+            valor_unitario: item.valor_unitario
+          });
+        }
+      }
+
+      alert(`✅ Orçamento #${orcamentoId} enviado ao cliente!\n\n💰 Valor Total: R$ ${calcularTotalOrcamento().toFixed(2)}\n\n⏳ Aguardando aprovação do cliente para iniciar o serviço.`);
+
+      setMostrarModalOrcamento(false);
+      setEtapaFluxo('aguardando_aprovacao');
+      setAgendamentoAtual(null);
+      setChecklistCriado(null);
+      setItensOrcamento([]);
+
+      carregarDadosIniciais();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao criar orçamento: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message));
+    }
+  };
+
+  // --- FUNÇÕES EXISTENTES (mantidas iguais) ---
   const solicitarCancelamento = (agendamento) => {
     setAgendamentoParaCancelar(agendamento);
     setMostrarModalCancelamento(true);
   };
 
-  // --- NOVO: Função para confirmar cancelamento ---
   const confirmarCancelamento = async () => {
     if (!agendamentoParaCancelar) return;
-
     try {
       await api.delete(`agendamentos/${agendamentoParaCancelar.id_agendamento}/`);
       alert('Agendamento cancelado com sucesso!');
@@ -123,101 +360,17 @@ function DashboardMecanico() {
     }
   };
 
-  const carregarVeiculos = async (clienteId) => {
-    try {
-      const resp = await api.get(`veiculos/?cliente=${clienteId}`);
-      const lista = Array.isArray(resp.data) ? resp.data : [];
-      setVeiculosDoCliente(lista.filter(v => v.cliente === parseInt(clienteId)));
-    } catch (err) { console.error(err); }
-  };
-
-  const abrirModalOS = (agendamento) => {
-    carregarVeiculos(agendamento.cliente);
-    setNovoOrcamento({
-      cliente: agendamento.cliente,
-      veiculo: agendamento.veiculo,
-      descricao: `Serviço de ${agendamento.servico_descricao}`,
-      valor_total: agendamento.preco || '',
-      status: 'PENDENTE',
-      validade: getDataValidadePadrao(),
-      id_agendamento_origem: agendamento.id_agendamento
-    });
-    setMostrarModalOrcamento(true);
-  };
-
-  const abrirModalChecklist = async (agendamento) => {
-    try {
-      const ano = new Date().getFullYear();
-      const numeroOS = `OS-${ano}-${agendamento.id_agendamento}`;
-      const mecId = mecanicos.find(m => m.nome === localStorage.getItem('user_name'))?.id_mecanico || mecanicos[0]?.id_mecanico;
-
-      const osPayload = { numero_os: numeroOS, veiculo: agendamento.veiculo, mecanico_responsavel: mecId, status: 'EM_ANDAMENTO' };
-      const osResponse = await api.post('ordens-servico/', osPayload);
-      const osId = osResponse.data.id_os;
-
-      setOsAtual(osId);
-      setNovoChecklist({ os: osId, nivel_combustivel: '', avarias_lataria: '', pneus_estado: 'Bom estado', possivel_defeito: '', observacoes: '' });
-      setMostrarModalChecklist(true);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao preparar Check List. Verifique se a OS já existe.');
-    }
-  };
-
-  const handleSalvarChecklist = async (e) => {
-    e.preventDefault();
-    if (!novoChecklist.possivel_defeito.trim()) { alert("É necessário informar o defeito relatado."); return; }
-    if (!novoChecklist.nivel_combustivel && !novoChecklist.avarias_lataria && !novoChecklist.pneus_estado) { alert("É necessário informar o estado do veículo."); return; }
-
-    try {
-      const mecId = mecanicos.find(m => m.nome === localStorage.getItem('user_name'))?.id_mecanico || mecanicos[0]?.id_mecanico;
-      const payload = { ...novoChecklist, mecanico: mecId, data_criacao: new Date().toISOString() };
-      await api.post('checklists/', payload);
-      alert('Check List de entrada salvo com sucesso!');
-      setMostrarModalChecklist(false);
-      carregarDadosIniciais();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data ? `Erro: ${JSON.stringify(err.response.data)}` : 'Erro ao salvar Check List.');
-    }
-  };
-
   const handeCriaAgendamento = async (e) => {
     e.preventDefault();
-
     try {
       const mecId = novoAgendamento.mecanico || mecanicos[0]?.id_mecanico;
 
-      // VALIDAÇÕES
-      if (!novoAgendamento.cliente) {
-        alert('Selecione um cliente!');
+      if (!novoAgendamento.cliente || !novoAgendamento.veiculo || !novoAgendamento.servico || !novoAgendamento.horario_inicio || !mecId) {
+        alert('Preencha todos os campos!');
         return;
       }
 
-      if (!novoAgendamento.veiculo) {
-        alert('Selecione um veículo!');
-        return;
-      }
-
-      if (!novoAgendamento.servico) {
-        alert('Selecione um serviço!');
-        return;
-      }
-
-      if (!novoAgendamento.horario_inicio) {
-        alert('Selecione data e hora!');
-        return;
-      }
-
-      if (!mecId) {
-        alert('Erro: Mecânico não identificado!');
-        return;
-      }
-
-      // --- CALCULAR HORÁRIO DE FIM BASEADO NO TEMPO ESTIMADO ---
       const servicoSelecionado = servicos.find(s => s.id_servico === parseInt(novoAgendamento.servico));
-
-      // CORREÇÃO: Não usar new Date() diretamente, usar o valor do input
       const [dataStr, horaStr] = novoAgendamento.horario_inicio.split('T');
       const [ano, mes, dia] = dataStr.split('-').map(Number);
       const [hora, minuto] = horaStr.split(':').map(Number);
@@ -225,7 +378,6 @@ function DashboardMecanico() {
       const dataInicio = new Date(ano, mes - 1, dia, hora, minuto, 0);
       let dataFim = new Date(dataInicio);
 
-      // Extrair horas do tempo_estimado (ex: "2h" ou "1.5h")
       if (servicoSelecionado?.tempo_estimado) {
         const tempoMatch = servicoSelecionado.tempo_estimado.match(/(\d+\.?\d*)/);
         if (tempoMatch) {
@@ -239,7 +391,6 @@ function DashboardMecanico() {
         dataFim.setHours(dataFim.getHours() + 1);
       }
 
-      // Formatar datas SEM timezone (usar horário local)
       const formatarDataLocal = (data) => {
         const ano = data.getFullYear();
         const mes = String(data.getMonth() + 1).padStart(2, '0');
@@ -250,84 +401,27 @@ function DashboardMecanico() {
         return `${ano}-${mes}-${dia}T${hora}:${minuto}:${segundo}`;
       };
 
-      const horarioInicioFormatado = formatarDataLocal(dataInicio);
-      const horarioFimFormatado = formatarDataLocal(dataFim);
-
       const payload = {
         cliente: parseInt(novoAgendamento.cliente),
         veiculo: parseInt(novoAgendamento.veiculo),
         servico: parseInt(novoAgendamento.servico),
         preco: parseFloat(novoAgendamento.preco) || 0,
-        horario_inicio: horarioInicioFormatado,
-        horario_fim: horarioFimFormatado,
+        horario_inicio: formatarDataLocal(dataInicio),
+        horario_fim: formatarDataLocal(dataFim),
         status: 'AGENDADO',
         mecanico: parseInt(mecId)
       };
 
-      console.log('📤 Payload que será enviado:', payload);
-      console.log(`⏰ Duração: ${servicoSelecionado?.tempo_estimado || '1h (padrão)'}`);
-
-      const response = await api.post('agendamentos/', payload);
-
-      console.log('✅ Resposta da API:', response.data);
+      await api.post('agendamentos/', payload);
 
       alert(`Agendamento criado com sucesso!\n\n⏰ Início: ${dataInicio.toLocaleString('pt-BR')}\n⏱️ Fim: ${dataFim.toLocaleString('pt-BR')}\n📅 Duração: ${servicoSelecionado?.tempo_estimado || '1h'}`);
 
       setMostrarModalAgendamento(false);
-
-      // Limpar formulário
-      setNovoAgendamento({
-        cliente: '',
-        veiculo: '',
-        servico: '',
-        horario_inicio: '',
-        preco: '',
-        mecanico: mecId
-      });
-
+      setNovoAgendamento({ cliente: '', veiculo: '', servico: '', horario_inicio: '', preco: '', mecanico: mecId });
       carregarDadosIniciais();
     } catch (err) {
       console.error('❌ Erro completo:', err);
-      console.error('📋 Dados do erro:', err.response?.data);
-
-      if (err.response?.data) {
-        const erros = JSON.stringify(err.response.data, null, 2);
-        alert(`Erro ao criar agendamento:\n\n${erros}`);
-      } else {
-        alert('Erro ao agendar. Verifique o console.');
-      }
-    }
-  };
-
-  const handleCriaOrcamento = async (e) => {
-    e.preventDefault();
-    try {
-      const nomeUser = localStorage.getItem('user_name');
-      const eu = mecanicos.find(m => m.nome === nomeUser || (m.user && m.user.username === nomeUser));
-      const mecId = eu ? (eu.id_mecanico || eu.id) : (mecanicos[0]?.id_mecanico || mecanicos[0]?.id);
-
-      if (!mecId) { alert("Erro: Mecânico não identificado."); return; }
-
-      let valorFinal = parseFloat(novoOrcamento.valor_total);
-      if (isNaN(valorFinal) || valorFinal <= 0) { alert("Por favor, insira um valor total válido."); return; }
-
-      const payload = {
-        cliente: parseInt(novoOrcamento.cliente),
-        veiculo: parseInt(novoOrcamento.veiculo),
-        descricao: novoOrcamento.descricao || "Serviço Mecânico Geral",
-        valor_total: valorFinal,
-        status: 'PENDENTE',
-        validade: novoOrcamento.validade,
-        mecanico: parseInt(mecId)
-      };
-
-      await api.post('orcamentos/', payload);
-      alert('OS/Orçamento enviado ao cliente com sucesso!');
-      setMostrarModalOrcamento(false);
-      carregarDadosIniciais();
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao criar OS.');
+      alert(`Erro ao criar agendamento:\n\n${err.response?.data ? JSON.stringify(err.response.data) : err.message}`);
     }
   };
 
@@ -341,6 +435,7 @@ function DashboardMecanico() {
     } catch (e) { alert('Erro ao cadastrar veículo.'); }
   };
 
+  // --- VENDA BALCÃO (mantido igual) ---
   const abrirModalVendaBalcao = () => {
     setCarrinhoVenda([]);
     setProdutoSelecionado('');
@@ -378,7 +473,6 @@ function DashboardMecanico() {
 
   const finalizarVenda = async () => {
     if (carrinhoVenda.length === 0) { alert('Adicione pelo menos um produto ao carrinho.'); return; }
-
     try {
       const payload = {
         itens: carrinhoVenda.map(item => ({
@@ -387,19 +481,13 @@ function DashboardMecanico() {
           valor_unitario: parseFloat(item.produto.preco_venda)
         }))
       };
-
       await api.post('vendas/', payload);
       alert('Venda realizada com sucesso!');
       setMostrarModalVendaBalcao(false);
       carregarDadosIniciais();
     } catch (err) {
       console.error('Erro completo:', err);
-      if (err.response?.data) {
-        const erros = JSON.stringify(err.response.data, null, 2);
-        alert(`Erro ao finalizar venda:\n\n${erros}`);
-      } else {
-        alert('Erro ao processar venda.');
-      }
+      alert(`Erro ao finalizar venda:\n\n${err.response?.data ? JSON.stringify(err.response.data) : err.message}`);
     }
   };
 
@@ -433,57 +521,155 @@ function DashboardMecanico() {
   const agendamentosHoje = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje);
   const agendamentosFuturos = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') !== hoje);
 
-  // Dentro da função DashboardMecanico, modifique o useEffect:
-  useEffect(() => {
-    if (mecanicos.length > 0) {
-      const user = localStorage.getItem('user_name');
-      const eu = mecanicos.find(m => m.nome === user || m.user?.username === user);
+  // NOVAS FUNÇÕES
+  const agendamentoTemChecklist = (idAgendamento) => {
+    return checklists.find(c => c.agendamento === idAgendamento);
+  };
 
-      if (eu) {
-        // Preenche o mecânico ao abrir o modal
-        setNovoAgendamento(prev => ({
-          ...prev,
-          mecanico: eu.id_mecanico
-        }));
-      }
+  const agendamentoTemOrcamento = (idAgendamento) => {
+    return orcamentos.find(o => o.agendamento === idAgendamento);
+  };
+
+  const abrirOrcamentoDireto = (agendamento) => {
+    const checklistExistente = agendamentoTemChecklist(agendamento.id_agendamento);
+
+    if (!checklistExistente) {
+      alert('Erro: Checklist não encontrado!');
+      return;
     }
-  }, [mecanicos]); // <--- Adicione esta dependência
+
+    setAgendamentoAtual(agendamento);
+    setChecklistCriado(checklistExistente);
+    abrirModalOrcamentoAposChecklist();
+  };
+
+  // NOVAS FUNÇÕES: ORDEM DE SERVIÇO
+  const [osAtual, setOsAtual] = useState(null);
+  const [novoStatusOS, setNovoStatusOS] = useState('');
+  const [observacoesOS, setObservacoesOS] = useState('');
+  const [mostrarConfirmacaoConclusao, setMostrarConfirmacaoConclusao] = useState(false);
+
+  // MODIFICAR a função iniciarServico para apenas abrir a OS existente
+  const iniciarServico = async (agendamento, orcamento) => {
+    try {
+      console.log('🔍 Buscando OS para orçamento:', orcamento);
+      console.log('📋 Ordens de Serviço disponíveis:', ordensServico);
+
+      // Buscar a OS que foi criada automaticamente quando o orçamento foi aprovado
+      const osExistente = ordensServico.find(os => {
+        console.log(`Comparando OS #${os.id_os}: os.orcamento=${os.orcamento} com orcamento.id_orcamento=${orcamento?.id_orcamento}`);
+        return os.orcamento === orcamento?.id_orcamento;
+      });
+
+      console.log('✅ OS encontrada:', osExistente);
+
+      if (!osExistente) {
+        console.error('❌ OS não encontrada!');
+        console.error('Orçamento procurado:', orcamento);
+        console.error('Todas as OS:', ordensServico);
+        
+        alert(`❌ Erro: Ordem de Serviço não encontrada!\n\nOrçamento: #${orcamento?.id_orcamento}\nVerifique se o orçamento foi aprovado corretamente.`);
+        return;
+      }
+
+      // Abrir modal para atualizar status da OS
+      setOsAtual(osExistente);
+      setNovoStatusOS(osExistente.status);
+      setObservacoesOS('');
+      setMostrarModalOS(true);
+
+    } catch (err) {
+      console.error('❌ Erro completo:', err);
+      alert('Erro ao carregar ordem de serviço: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message));
+    }
+  };
+
+  const atualizarStatusOS = async (e) => {
+    e.preventDefault();
+
+    if (!osAtual) return;
+
+    // Se o status for CONCLUIDO, mostrar confirmação
+    if (novoStatusOS === 'CONCLUIDO') {
+      setMostrarConfirmacaoConclusao(true);
+      return;
+    }
+
+    try {
+      const payload = {
+        status: novoStatusOS
+      };
+
+      await api.patch(`ordens-servico/${osAtual.id_os}/`, payload);
+
+      alert('✅ Status atualizado com sucesso!');
+
+      setMostrarModalOS(false);
+      carregarDadosIniciais();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao atualizar status: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message));
+    }
+  };
+
+  const confirmarConclusao = async () => {
+    try {
+      // Atualizar status da OS
+      await api.patch(`ordens-servico/${osAtual.id_os}/`, {
+        status: 'CONCLUIDO',
+        data_conclusao: new Date().toISOString().split('T')[0]
+      });
+
+      // Atualizar status do agendamento
+      const agendamento = agendamentos.find(ag =>
+        orcamentos.find(orc => orc.id_orcamento === osAtual.orcamento)?.agendamento === ag.id_agendamento
+      );
+
+      if (agendamento) {
+        await api.patch(`agendamentos/${agendamento.id_agendamento}/`, {
+          status: 'CONCLUIDO'
+        });
+      }
+
+      alert('🎉 Serviço concluído com sucesso!\n\nO agendamento foi finalizado e movido para o histórico.');
+
+      setMostrarConfirmacaoConclusao(false);
+      setMostrarModalOS(false);
+      carregarDadosIniciais();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao concluir serviço: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message));
+    }
+  };
+
+  // FILTRAR AGENDAMENTOS CONCLUÍDOS
+  const agendamentosConcluidos = agendamentos.filter(ag => ag.status === 'CONCLUIDO');
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-      {/* NAVBAR ATUALIZADA - Igual ao DashboardAdmin */}
+      {/* NAVBAR */}
       <nav className="bg-blue-800 text-white px-6 py-4 flex justify-between shadow-lg sticky top-0 z-10">
         <h1 className="text-2xl font-bold">🛠️ Oficina Dashboard</h1>
         <div className="flex gap-4 items-center">
           {notificacoes.length > 0 && (
-            <button
-              onClick={abrirModalEstoque}
-              className="bg-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-700 flex items-center gap-2"
-            >
+            <button onClick={abrirModalEstoque} className="bg-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-700 flex items-center gap-2">
               🔔 Alertas
-              <span className="bg-white text-red-600 text-xs rounded-full px-2 py-1">
-                {notificacoes.length}
-              </span>
+              <span className="bg-white text-red-600 text-xs rounded-full px-2 py-1">{notificacoes.length}</span>
             </button>
           )}
-
           <button onClick={() => setMostrarModalVeiculo(true)} className="bg-indigo-600 px-4 py-2 rounded font-bold hover:bg-indigo-700">+ Veículo</button>
           <button onClick={() => setMostrarModalAgendamento(true)} className="bg-blue-600 px-4 py-2 rounded font-bold hover:bg-blue-700">+ Novo Agendamento</button>
           <button onClick={abrirModalVendaBalcao} className="bg-green-600 px-4 py-2 rounded font-bold hover:bg-green-700">💰 Venda Balcão</button>
           <button onClick={abrirModalEstoque} className="bg-orange-600 px-4 py-2 rounded font-bold hover:bg-orange-700">
             📦 Estoque
-            {produtosEstoqueBaixo.length > 0 && (
-              <span className="ml-2 bg-white text-orange-600 text-xs rounded-full px-2">
-                {produtosEstoqueBaixo.length}
-              </span>
-            )}
+            {produtosEstoqueBaixo.length > 0 && <span className="ml-2 bg-white text-orange-600 text-xs rounded-full px-2">{produtosEstoqueBaixo.length}</span>}
           </button>
           <button onClick={handleLogout} className="text-gray-300 font-bold">Sair</button>
         </div>
       </nav>
 
       <main className="flex-1 p-8 max-w-7xl mx-auto w-full flex flex-col gap-8">
-        {/* Alertas de Estoque */}
+        {/* ALERTAS DE ESTOQUE */}
         {notificacoes.length > 0 && (
           <section className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-3">
@@ -506,36 +692,45 @@ function DashboardMecanico() {
               ))}
             </div>
             {notificacoes.length > 3 && (
-              <button onClick={abrirModalEstoque} className="mt-3 text-sm text-red-700 font-bold hover:underline">
-                Ver todas ({notificacoes.length})
-              </button>
+              <button onClick={abrirModalEstoque} className="mt-3 text-sm text-red-700 font-bold hover:underline">Ver todas ({notificacoes.length})</button>
             )}
           </section>
         )}
 
+        {/* AGENDA DE HOJE */}
         <section>
-          <div className="flex items-center mb-6 gap-3"><h2 className="text-2xl font-bold text-gray-800">Agenda de Hoje</h2></div>
+          <div className="flex items-center mb-6 gap-3">
+            <h2 className="text-2xl font-bold text-gray-800">📅 Agenda de Hoje</h2>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {agendamentosHoje.map(ag => (
-              <CardAgendamento
-                key={ag.id_agendamento}
-                agendamento={ag}
-                aoClicarGerarOS={() => abrirModalOS(ag)}
-                aoClicarChecklist={() => abrirModalChecklist(ag)}
-                aoClicarCancelar={() => solicitarCancelamento(ag)}
-              />
-            ))}
-            {agendamentosHoje.length === 0 && <p className="text-gray-400">Vazio.</p>}
+            {agendamentosHoje.map(ag => {
+              const temChecklist = agendamentoTemChecklist(ag.id_agendamento);
+              const temOrcamento = agendamentoTemOrcamento(ag.id_agendamento);
+
+              return (
+                <CardAgendamentoNovo
+                  key={ag.id_agendamento}
+                  agendamento={ag}
+                  aoIniciarAtendimento={() => iniciarFluxoAtendimento(ag)}
+                  aoAbrirOrcamento={() => abrirOrcamentoDireto(ag)}
+                  aoIniciarServico={() => iniciarServico(ag, temOrcamento)} // <--- ADICIONAR
+                  aoClicarCancelar={() => solicitarCancelamento(ag)}
+                  temChecklist={!!temChecklist}
+                  orcamento={temOrcamento}
+                />
+              );
+            })}
+            {agendamentosHoje.length === 0 && <p className="text-gray-400">Sem agendamentos para hoje.</p>}
           </div>
         </section>
 
+        {/* PRÓXIMOS AGENDAMENTOS */}
         <section>
-          <h3 className="text-lg font-bold text-gray-600 mb-4 border-b pb-2">Próximos Agendamentos</h3>
+          <h3 className="text-lg font-bold text-gray-600 mb-4 border-b pb-2">📆 Próximos Agendamentos</h3>
           <div className="grid grid-cols-1 gap-4">
             {agendamentosFuturos.map(ag => {
               const inicio = new Date(ag.horario_inicio);
               const fim = ag.horario_fim ? new Date(ag.horario_fim) : null;
-
               return (
                 <div key={ag.id_agendamento} className="bg-white p-4 rounded shadow flex justify-between items-center">
                   <div>
@@ -547,8 +742,6 @@ function DashboardMecanico() {
                     <div className="text-sm text-blue-600">{ag.servico_descricao}</div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => abrirModalChecklist(ag)} className="bg-purple-100 text-purple-700 px-3 py-1 rounded text-sm font-bold hover:bg-purple-200">Check List</button>
-                    <button onClick={() => abrirModalOS(ag)} className="bg-orange-100 text-orange-700 px-3 py-1 rounded text-sm font-bold hover:bg-orange-200">Gerar OS</button>
                     <button onClick={() => solicitarCancelamento(ag)} className="bg-red-100 text-red-700 px-3 py-1 rounded text-sm font-bold hover:bg-red-200">Cancelar</button>
                   </div>
                 </div>
@@ -556,9 +749,60 @@ function DashboardMecanico() {
             })}
           </div>
         </section>
+
+        {/* SERVIÇOS FINALIZADOS */}
+        <section>
+          <h3 className="text-lg font-bold text-gray-600 mb-4 border-b pb-2">✅ Histórico de Serviços Finalizados</h3>
+          <div className="grid grid-cols-1 gap-4">
+            {agendamentosConcluidos.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">Nenhum serviço finalizado ainda.</p>
+            ) : (
+              agendamentosConcluidos.map(ag => {
+                const orcamento = orcamentos.find(o => o.agendamento === ag.id_agendamento);
+                const os = ordensServico.find(os => os.orcamento === orcamento?.id_orcamento);
+
+                return (
+                  <div key={ag.id_agendamento} className="bg-white p-4 rounded shadow border-l-4 border-green-500">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h4 className="font-bold text-gray-800">{ag.cliente_nome}</h4>
+                          <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded font-bold">✅ CONCLUÍDO</span>
+                        </div>
+                        <p className="text-sm text-gray-600">{ag.veiculo_modelo} - {ag.veiculo_placa}</p>
+                        <p className="text-sm text-blue-600 font-bold mt-1">{ag.servico_descricao}</p>
+
+                        {os && (
+                          <div className="mt-3 bg-gray-50 p-3 rounded border">
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <p className="text-gray-500">Início</p>
+                                <p className="font-bold">{new Date(os.data_inicio).toLocaleDateString('pt-BR')}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-500">Conclusão</p>
+                                <p className="font-bold">{os.data_conclusao ? new Date(os.data_conclusao).toLocaleDateString('pt-BR') : 'N/A'}</p>
+                              </div>
+                            </div>
+                            {orcamento && (
+                              <div className="mt-2 pt-2 border-t">
+                                <p className="text-xs text-gray-500">Valor Total</p>
+                                <p className="text-lg font-bold text-green-600">R$ {parseFloat(orcamento.valor_total || 0).toFixed(2)}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
       </main>
 
-      {/* MODAL DE CONFIRMAÇÃO DE CANCELAMENTO */}
+      {/* MODAIS */}
       {mostrarModalCancelamento && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
@@ -897,24 +1141,172 @@ function DashboardMecanico() {
         </div>
       )}
 
-      {/* MODAL ORÇAMENTO (Mantido igual) */}
+      {/* MODAL ORÇAMENTO COMPLETO - COM ADIÇÃO DE PEÇAS */}
       {mostrarModalOrcamento && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md relative animate-fade-in">
-            <button onClick={() => setMostrarModalOrcamento(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">✕</button>
-            <h2 className="text-xl font-bold mb-4 text-orange-600">Gerar Ordem de Serviço (OS)</h2>
-            <form onSubmit={handleCriaOrcamento} className="flex flex-col gap-3">
-              <label className="lbl">Data de Validade</label>
-              <input type="date" className="input-padrao" value={novoOrcamento.validade} onChange={e => setNovoOrcamento({ ...novoOrcamento, validade: e.target.value })} required />
-              <label className="lbl">Cliente</label>
-              <select className="input-padrao bg-gray-100" value={novoOrcamento.cliente} disabled><option>{clientes.find(c => c.id_cliente === novoOrcamento.cliente)?.nome || 'Cliente'}</option></select>
-              <label className="lbl">Veículo</label>
-              <select className="input-padrao bg-gray-100" value={novoOrcamento.veiculo} disabled><option>{veiculosDoCliente.find(v => v.id_veiculo === novoOrcamento.veiculo)?.modelo || 'Veículo'}</option></select>
-              <label className="lbl">Peças e Detalhes Adicionais</label>
-              <textarea className="input-padrao h-24" placeholder="Descreva peças necessárias..." value={novoOrcamento.descricao} onChange={e => setNovoOrcamento({ ...novoOrcamento, descricao: e.target.value })} required />
-              <label className="lbl">Valor Final da OS (R$)</label>
-              <input type="number" step="0.01" className="input-padrao font-bold text-lg border-orange-300" placeholder="0.00" value={novoOrcamento.valor_total} onChange={e => setNovoOrcamento({ ...novoOrcamento, valor_total: e.target.value })} required />
-              <button type="submit" className="mt-4 bg-orange-600 text-white font-bold py-3 rounded-lg hover:bg-orange-700 shadow-md">Enviar para Aprovação</button>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl relative max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setMostrarModalOrcamento(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+
+            <h2 className="text-2xl font-bold mb-6 text-orange-700">📝 Criar Orçamento</h2>
+
+            <form onSubmit={handleCriaOrcamento} className="flex flex-col gap-6">
+              {/* INFORMAÇÕES DO AGENDAMENTO */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="font-bold text-blue-800 mb-3">📋 Informações do Agendamento</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Cliente</p>
+                    <p className="font-bold text-gray-800">{clientes.find(c => c.id_cliente === novoOrcamento.cliente)?.nome || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Veículo</p>
+                    <p className="font-bold text-gray-800">{veiculosDoCliente.find(v => v.id_veiculo === novoOrcamento.veiculo)?.modelo || 'N/A'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-600">Defeito Relatado</p>
+                    <p className="text-gray-700">{checklistCriado?.possivel_defeito || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ITENS DO ORÇAMENTO */}
+              <div className="border rounded-lg p-4">
+                <h3 className="font-bold text-gray-700 mb-4">🔧 Itens do Orçamento</h3>
+
+                {/* LISTA DE ITENS */}
+                <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+                  {itensOrcamento.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">Nenhum item adicionado</p>
+                  ) : (
+                    itensOrcamento.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center bg-gray-50 p-3 rounded border">
+                        <div className="flex-1">
+                          <p className="font-bold text-gray-800">
+                            {item.tipo === 'servico' ? '🔧' : '🔩'} {item.produto_nome}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {item.quantidade} x R$ {item.valor_unitario.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-green-600">
+                            R$ {(item.quantidade * item.valor_unitario).toFixed(2)}
+                          </span>
+                          {item.tipo === 'produto' && (
+                            <button
+                              type="button"
+                              onClick={() => removerItemOrcamento(index)}
+                              className="text-red-500 hover:text-red-700 font-bold"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* ADICIONAR PEÇA/PRODUTO */}
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                  <h4 className="font-bold text-orange-800 mb-3">➕ Adicionar Peça/Produto</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <select
+                        className="w-full p-2 border rounded"
+                        value={produtoOrcamento}
+                        onChange={e => setProdutoOrcamento(e.target.value)}
+                      >
+                        <option value="">Selecione uma peça...</option>
+                        {produtos.map(p => (
+                          <option key={p.id_produto} value={p.id_produto}>
+                            {p.nome} - R$ {parseFloat(p.preco_venda).toFixed(2)} (Estoque: {p.estoque_atual})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-full p-2 border rounded"
+                        placeholder="Qtd"
+                        value={quantidadeOrcamento}
+                        onChange={e => setQuantidadeOrcamento(parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={adicionarItemOrcamento}
+                    className="w-full bg-orange-600 text-white font-bold py-2 rounded mt-3 hover:bg-orange-700"
+                  >
+                    ➕ Adicionar Peça
+                  </button>
+                </div>
+              </div>
+
+              {/* DESCRIÇÃO ADICIONAL */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Observações / Detalhes do Serviço
+                </label>
+                <textarea
+                  className="w-full p-3 border rounded-lg h-24"
+                  placeholder="Adicione observações adicionais sobre o serviço..."
+                  value={novoOrcamento.descricao}
+                  onChange={e => setNovoOrcamento({ ...novoOrcamento, descricao: e.target.value })}
+                />
+              </div>
+
+              {/* VALIDADE */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Data de Validade do Orçamento
+                </label>
+                <input
+                  type="date"
+                  className="w-full p-3 border rounded-lg"
+                  value={novoOrcamento.validade}
+                  onChange={e => setNovoOrcamento({ ...novoOrcamento, validade: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* TOTAL */}
+              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-300">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-gray-600">Valor Total do Orçamento</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {itensOrcamento.filter(i => i.tipo === 'servico').length} serviço(s) + {itensOrcamento.filter(i => i.tipo === 'produto').length} peça(s)
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-4xl font-bold text-green-600">
+                      R$ {calcularTotalOrcamento().toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* BOTÕES */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalOrcamento(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-orange-600 text-white font-bold py-3 rounded-lg hover:bg-orange-700 shadow-md"
+                  disabled={itensOrcamento.length === 0}
+                >
+                  📤 Enviar Orçamento ao Cliente
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1100,7 +1492,121 @@ function DashboardMecanico() {
         </div>
       )}
 
-      <style>{`.input-padrao { width: 100%; border: 1px solid #ddd; padding: 8px; rounded: 4px; } .btn { padding: 8px 16px; rounded: 6px; font-weight: bold; } .lbl { font-size: 12px; font-weight: bold; color: #666; }`}</style>
+      {/* MODAL ATUALIZAR STATUS DA OS */}
+      {mostrarModalOS && osAtual && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl relative">
+            <button onClick={() => setMostrarModalOS(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+
+            <h2 className="text-2xl font-bold mb-6 text-blue-700">🔧 Ordem de Serviço #{osAtual.id_os}</h2>
+
+            <form onSubmit={atualizarStatusOS} className="flex flex-col gap-6">
+              {/* INFORMAÇÕES DA OS */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="font-bold text-blue-800 mb-3">Informações do Serviço</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-600">Status Atual</p>
+                    <p className="font-bold text-gray-800">
+                      {osAtual.status === 'AGUARDANDO_INICIO' ? '⏸️ Aguardando Início' : osAtual.status}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Data de Criação</p>
+                    <p className="font-bold text-gray-800">{new Date(osAtual.data_inicio).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ATUALIZAR STATUS */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Atualizar Status *
+                </label>
+                <select
+                  className="w-full p-3 border rounded-lg"
+                  value={novoStatusOS}
+                  onChange={e => setNovoStatusOS(e.target.value)}
+                  required
+                >
+                  <option value="AGUARDANDO_INICIO">⏸️ Aguardando Início</option>
+                  <option value="EM_ANDAMENTO">🔄 Em Andamento</option>
+                  <option value="AGUARDANDO_PECA">⏳ Aguardando Peça</option>
+                  <option value="AGUARDANDO_CLIENTE">📞 Aguardando Cliente</option>
+                  <option value="CONCLUIDO">✅ Concluído</option>
+                </select>
+              </div>
+
+              {/* OBSERVAÇÕES */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Observações sobre a Atualização
+                </label>
+                <textarea
+                  className="w-full p-3 border rounded-lg h-24"
+                  placeholder="Ex: Iniciando diagnóstico do motor..."
+                  value={observacoesOS}
+                  onChange={e => setObservacoesOS(e.target.value)}
+                />
+              </div>
+
+              {/* BOTÕES */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalOS(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700"
+                >
+                  {novoStatusOS === 'CONCLUIDO' ? '✅ Finalizar Serviço' : '🔄 Atualizar Status'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMAÇÃO DE CONCLUSÃO */}
+      {mostrarConfirmacaoConclusao && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold mb-4 text-green-700">🎉 Confirmar Conclusão do Serviço</h2>
+
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+              <p className="text-sm text-yellow-800">
+                <strong>Atenção:</strong> Ao confirmar, o serviço será marcado como <strong>CONCLUIDO</strong> e o agendamento será finalizado.
+              </p>
+            </div>
+
+            <p className="text-gray-700 mb-6">
+              Tem certeza que deseja finalizar este serviço?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setMostrarConfirmacaoConclusao(false)}
+                className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarConclusao}
+                className="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700"
+              >
+                ✅ Sim, Finalizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESTANTE DOS MODAIS (manter iguais) */}
+      {/* ... */}
     </div>
   );
 }
@@ -1143,6 +1649,145 @@ function CardAgendamento({ agendamento, aoClicarGerarOS, aoClicarChecklist, aoCl
           📝 Gerar OS / Orçamento
         </button>
         <button onClick={aoClicarCancelar} className="w-full bg-red-50 text-red-700 border border-red-200 py-2 rounded font-bold text-sm hover:bg-red-100 transition-colors">
+          ❌ Cancelar Agendamento
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamento, aoIniciarServico, aoClicarCancelar, temChecklist, orcamento }) {
+  const dataInicio = new Date(agendamento.horario_inicio);
+  const dataFim = agendamento.horario_fim ? new Date(agendamento.horario_fim) : null;
+
+  const horaInicio = dataInicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const horaFim = dataFim ? dataFim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '?';
+  const diaMes = dataInicio.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+  const statusFluxo = orcamento
+    ? orcamento.status
+    : (temChecklist ? 'CHECKLIST_FEITO' : 'AGUARDANDO_CHECKLIST');
+
+  return (
+    <div className="bg-white p-4 shadow-md rounded-lg border-l-4 border-blue-500 flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
+      <div>
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <span className="text-2xl font-bold text-gray-800">{horaInicio}</span>
+            {dataFim && (
+              <span className="text-sm text-gray-500 ml-1">até {horaFim}</span>
+            )}
+            <span className="text-xs text-gray-400 ml-2 block">{diaMes}</span>
+          </div>
+          <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold">{agendamento.status}</span>
+        </div>
+        <div className="mb-3">
+          <h4 className="font-bold text-gray-900">{agendamento.cliente_nome}</h4>
+          <div className="text-gray-500 text-sm truncate">{agendamento.veiculo_modelo} - {agendamento.veiculo_placa}</div>
+        </div>
+        <div className="text-sm text-blue-600 font-semibold uppercase mb-4 tracking-wide border-t pt-2 border-gray-100">
+          {agendamento.servico_descricao}
+        </div>
+
+        {/* INDICADORES DE STATUS */}
+        <div className="space-y-2 mb-4">
+          {/* Checklist */}
+          {temChecklist && (
+            <div className="bg-green-50 border border-green-200 rounded p-2 flex items-center gap-2">
+              <span className="text-green-600">✅</span>
+              <p className="text-xs text-green-700 font-bold">Check List Preenchido</p>
+            </div>
+          )}
+
+          {/* Orçamento */}
+          {orcamento && (
+            <div className={`border rounded p-2 flex items-center gap-2 ${orcamento.status === 'PENDENTE'
+              ? 'bg-yellow-50 border-yellow-200'
+              : orcamento.status === 'APROVADO'
+                ? 'bg-green-50 border-green-200'
+                : 'bg-red-50 border-red-200'
+              }`}>
+              <span className={
+                orcamento.status === 'PENDENTE'
+                  ? 'text-yellow-600'
+                  : orcamento.status === 'APROVADO'
+                    ? 'text-green-600'
+                    : 'text-red-600'
+              }>
+                {orcamento.status === 'PENDENTE' ? '⏳' : orcamento.status === 'APROVADO' ? '✅' : '❌'}
+              </span>
+              <div className="flex-1">
+                <p className={`text-xs font-bold ${orcamento.status === 'PENDENTE'
+                  ? 'text-yellow-700'
+                  : orcamento.status === 'APROVADO'
+                    ? 'text-green-700'
+                    : 'text-red-700'
+                  }`}>
+                  {orcamento.status === 'PENDENTE'
+                    ? `Orçamento #${orcamento.id_orcamento} - Aguardando Cliente`
+                    : orcamento.status === 'APROVADO'
+                      ? `Orçamento #${orcamento.id_orcamento} - Aprovado`
+                      : `Orçamento #${orcamento.id_orcamento} - Rejeitado`
+                  }
+                </p>
+                {orcamento.status === 'PENDENTE' && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Valor: R$ {parseFloat(orcamento.valor_total || 0).toFixed(2)}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {statusFluxo === 'AGUARDANDO_CHECKLIST' && (
+          <button
+            onClick={aoIniciarAtendimento}
+            className="w-full bg-green-50 text-green-700 border border-green-200 py-2 rounded font-bold text-sm hover:bg-green-100 transition-colors"
+          >
+            🚀 Iniciar Atendimento
+          </button>
+        )}
+
+        {statusFluxo === 'CHECKLIST_FEITO' && (
+          <button
+            onClick={aoAbrirOrcamento}
+            className="w-full bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded font-bold text-sm hover:bg-orange-100 transition-colors"
+          >
+            📝 Gerar Orçamento
+          </button>
+        )}
+
+        {statusFluxo === 'PENDENTE' && (
+          <div className="w-full bg-yellow-50 text-yellow-700 border border-yellow-200 py-2 rounded font-bold text-sm text-center">
+            ⏳ Aguardando Aprovação
+          </div>
+        )}
+
+        {statusFluxo === 'APROVADO' && (
+          <button
+            onClick={aoIniciarServico}
+            className="w-full bg-blue-50 text-blue-700 border border-blue-200 py-2 rounded font-bold text-sm hover:bg-blue-100 transition-colors"
+          >
+            🔧 Iniciar Serviço
+          </button>
+        )}
+
+        {statusFluxo === 'REJEITADO' && (
+          <button
+            onClick={aoAbrirOrcamento}
+            className="w-full bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded font-bold text-sm hover:bg-orange-100 transition-colors"
+          >
+            📝 Criar Novo Orçamento
+          </button>
+        )}
+
+        <button
+          onClick={aoClicarCancelar}
+          className="w-full bg-red-50 text-red-700 border border-red-200 py-2 rounded font-bold text-sm hover:bg-red-100 transition-colors"
+        >
           ❌ Cancelar Agendamento
         </button>
       </div>

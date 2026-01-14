@@ -5,7 +5,7 @@ from usuarios.views import FornecedorViewSet
 
 router = DefaultRouter()
 router.register(r'orcamentos', OrcamentoViewSet)
-router.register(r'itens', ItemMovimentacaoViewSet)
+router.register(r'itens-movimentacao', ItemMovimentacaoViewSet)
 router.register(r'vendas', VendaViewSet)
 router.register(r'checklists', ChecklistViewSet)
 router.register(r'laudos', LaudoTecnicoViewSet)

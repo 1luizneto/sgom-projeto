@@ -36,18 +36,20 @@ class Orcamento(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     validade = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
-    descricao = models.TextField(blank=True, null=True)  # <--- ADICIONE
+    descricao = models.TextField(blank=True, null=True)
     
-    # Referências cruzadas entre apps
+    # Referências
     cliente = models.ForeignKey('usuarios.Cliente', on_delete=models.CASCADE)
     veiculo = models.ForeignKey('veiculos.Veiculo', on_delete=models.CASCADE)
     mecanico = models.ForeignKey('usuarios.Mecanico', on_delete=models.PROTECT)
+    agendamento = models.ForeignKey('veiculos.Agendamento', on_delete=models.SET_NULL, null=True, blank=True, related_name='orcamentos')  # <--- ADICIONE
+    checklist = models.ForeignKey('Checklist', on_delete=models.SET_NULL, null=True, blank=True, related_name='orcamentos')  # <--- ADICIONE
 
     def __str__(self):
         return f"Orçamento #{self.id_orcamento}"
 
     def calcular_total(self):
-        """Calcula o valor total do orçamento baseado nos itens"""  
+        from decimal import Decimal
         total = self.itens.aggregate(
             total=models.Sum(models.F('quantidade') * models.F('valor_unitario'))
         )['total']
@@ -55,7 +57,6 @@ class Orcamento(models.Model):
 
     @property
     def valor_total(self):
-        """Propriedade que retorna o valor total calculado"""
         return self.calcular_total()
 
 # --- Ordem de Serviço (OS) ---
@@ -106,23 +107,21 @@ class ItemMovimentacao(models.Model):
 # --- Satélites (Checklist e Laudo) ---
 class Checklist(models.Model):
     id_checklist = models.AutoField(primary_key=True)
-    os = models.OneToOneField(OrdemServico, on_delete=models.CASCADE, related_name='checklist')
+    os = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='checklists', null=True, blank=True)  # <--- TORNAR OPCIONAL
+    agendamento = models.ForeignKey('veiculos.Agendamento', on_delete=models.CASCADE, related_name='checklists', null=True, blank=True)  # <--- ADICIONE
+    mecanico = models.ForeignKey('usuarios.Mecanico', on_delete=models.PROTECT, null=True)
+    data_criacao = models.DateTimeField(auto_now_add=True, null=True)
     
-    # Estado Atual
-    nivel_combustivel = models.CharField(max_length=50) # Ex: 1/4, 1/2, Cheio
-    avarias_lataria = models.TextField(blank=True, null=True) # Mantendo nome legado, mapeado para Avarias Visuais
-    pneus_estado = models.CharField(max_length=100, default='Bom estado') # Novo
-    
-    # Diagnóstico Inicial
-    possivel_defeito = models.TextField(null=True, blank=True) # Obrigatório via serializer
+    # Informações do veículo no momento da entrada
+    nivel_combustivel = models.CharField(max_length=50)
+    avarias_lataria = models.TextField(
+    default='Sem avarias visíveis', blank=True, help_text="Descreva avarias na lataria,vidros, etc.", null=True)
+    pneus_estado = models.CharField(max_length=100)
+    possivel_defeito = models.TextField(null=True, blank=True)
     observacoes = models.TextField(blank=True, null=True)
-    
-    # Auditoria
-    data_criacao = models.DateTimeField(null=True, blank=True)
-    mecanico = models.ForeignKey('usuarios.Mecanico', on_delete=models.SET_NULL, null=True)
 
     def __str__(self):
-        return f"Checklist OS #{self.os.numero_os}"
+        return f"Checklist #{self.id_checklist}"
 
 class LaudoTecnico(models.Model):
     id_laudo = models.AutoField(primary_key=True)

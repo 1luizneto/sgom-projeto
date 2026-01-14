@@ -62,17 +62,18 @@ class Orcamento(models.Model):
 # --- Ordem de Serviço (OS) ---
 class OrdemServico(models.Model):
     STATUS_CHOICES = [
+        ('AGUARDANDO_INICIO', 'Aguardando Início'),
         ('EM_ANDAMENTO', 'Em Andamento'),
-        ('AGUARDANDO_PECAS', 'Aguardando Peças'),
+        ('AGUARDANDO_PECAS', 'Aguardando Peças'),  
         ('CONCLUIDA', 'Concluída'),
         ('CANCELADA', 'Cancelada'),
     ]
 
     id_os = models.AutoField(primary_key=True)
     numero_os = models.CharField(max_length=20, unique=True)
-    data_abertura = models.DateTimeField(auto_now_add=True)
+    data_abertura = models.DateTimeField(auto_now_add=True)  # <--- Este é o campo correto
     data_conclusao = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='EM_ANDAMENTO')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AGUARDANDO_INICIO')
     
     # Relacionamento interno no mesmo app
     orcamento = models.OneToOneField(Orcamento, on_delete=models.SET_NULL, null=True, blank=True)

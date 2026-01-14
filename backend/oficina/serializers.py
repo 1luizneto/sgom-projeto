@@ -209,22 +209,25 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     veiculo_placa = serializers.ReadOnlyField(source='veiculo.placa')
     mecanico_nome = serializers.ReadOnlyField(source='mecanico_responsavel.nome')
     
-    # Novos campos para o cliente
+    # Campo calculado para o frontend (usar data_abertura)
+    data_inicio = serializers.DateTimeField(source='data_abertura', read_only=True)
+    
     status_cliente = serializers.SerializerMethodField()
     descricao_status = serializers.SerializerMethodField()
     
     class Meta:
         model = OrdemServico
         fields = [
-            'id_os', 'numero_os', 'data_abertura', 'data_conclusao', 
+            'id_os', 'numero_os', 'data_abertura', 'data_inicio', 'data_conclusao', 
             'status', 'orcamento', 'veiculo', 'veiculo_modelo', 
             'veiculo_placa', 'mecanico_responsavel', 'mecanico_nome',
             'status_cliente', 'descricao_status'
         ]
-        read_only_fields = ['data_abertura']
+        read_only_fields = ['data_abertura', 'numero_os']
 
     def get_status_cliente(self, obj):
         mapping = {
+            'AGUARDANDO_INICIO': 'Aguardando Início',
             'EM_ANDAMENTO': 'Em Manutenção',
             'AGUARDANDO_PECAS': 'Parado - Aguardando Peças',
             'CONCLUIDA': 'Pronto para Retirada',
@@ -234,6 +237,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
 
     def get_descricao_status(self, obj):
         mapping = {
+            'AGUARDANDO_INICIO': 'Aguardando mecânico iniciar o serviço',
             'EM_ANDAMENTO': 'Mecânico trabalhando no veículo',
             'AGUARDANDO_PECAS': 'Aguardando chegada de peças para continuar',
             'CONCLUIDA': 'O serviço foi finalizado e o veículo pode ser retirado.',

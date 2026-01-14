@@ -590,7 +590,7 @@ function DashboardMecanico() {
     if (!osAtual) return;
 
     // Se o status for CONCLUIDO, mostrar confirmação
-    if (novoStatusOS === 'CONCLUIDO') {
+    if (novoStatusOS === 'CONCLUIDA') {
       setMostrarConfirmacaoConclusao(true);
       return;
     }
@@ -614,33 +614,64 @@ function DashboardMecanico() {
 
   const confirmarConclusao = async () => {
     try {
-      // Atualizar status da OS
-      await api.patch(`ordens-servico/${osAtual.id_os}/`, {
-        status: 'CONCLUIDO',
-        data_conclusao: new Date().toISOString().split('T')[0]
+      console.log('🔧 Concluindo OS:', osAtual);
+
+      // 1. Atualizar status da OS
+      const responseOS = await api.patch(`ordens-servico/${osAtual.id_os}/`, {
+        status: 'CONCLUIDA',
+        data_conclusao: new Date().toISOString()
       });
 
-      // Atualizar status do agendamento
-      const agendamento = agendamentos.find(ag =>
-        orcamentos.find(orc => orc.id_orcamento === osAtual.orcamento)?.agendamento === ag.id_agendamento
-      );
+      console.log('✅ OS atualizada:', responseOS.data);
 
-      if (agendamento) {
-        await api.patch(`agendamentos/${agendamento.id_agendamento}/`, {
-          status: 'CONCLUIDO'
-        });
+      // 2. Buscar o agendamento vinculado
+      const orcamento = orcamentos.find(orc => orc.id_orcamento === osAtual.orcamento);
+      
+      if (!orcamento) {
+        console.error('❌ Orçamento não encontrado para esta OS');
+        alert('⚠️ OS concluída, mas não foi possível atualizar o agendamento.');
+        setMostrarConfirmacaoConclusao(false);
+        setMostrarModalOS(false);
+        carregarDadosIniciais();
+        return;
       }
+
+      const agendamento = agendamentos.find(ag => ag.id_agendamento === orcamento.agendamento);
+
+      if (!agendamento) {
+        console.error('❌ Agendamento não encontrado');
+        alert('⚠️ OS concluída, mas não foi possível atualizar o agendamento.');
+        setMostrarConfirmacaoConclusao(false);
+        setMostrarModalOS(false);
+        carregarDadosIniciais();
+        return;
+      }
+
+      console.log('📋 Atualizando agendamento:', agendamento.id_agendamento);
+
+      // 3. Atualizar status do agendamento (PATCH parcial)
+      const responseAgendamento = await api.patch(`agendamentos/${agendamento.id_agendamento}/`, {
+        status: 'CONCLUIDO'
+      });
+
+      console.log('✅ Agendamento atualizado:', responseAgendamento.data);
 
       alert('🎉 Serviço concluído com sucesso!\n\nO agendamento foi finalizado e movido para o histórico.');
 
       setMostrarConfirmacaoConclusao(false);
       setMostrarModalOS(false);
       carregarDadosIniciais();
+
     } catch (err) {
-      console.error(err);
-      alert('Erro ao concluir serviço: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message));
+      console.error('❌ Erro ao concluir serviço:', err);
+      console.error('Response data:', err.response?.data);
+      
+      alert('Erro ao concluir serviço: ' + 
+        (err.response?.data 
+          ? JSON.stringify(err.response.data) 
+          : err.message));
     }
-  };
+  };  
 
   // FILTRAR AGENDAMENTOS CONCLUÍDOS
   const agendamentosConcluidos = agendamentos.filter(ag => ag.status === 'CONCLUIDO');
@@ -1531,9 +1562,9 @@ function DashboardMecanico() {
                 >
                   <option value="AGUARDANDO_INICIO">⏸️ Aguardando Início</option>
                   <option value="EM_ANDAMENTO">🔄 Em Andamento</option>
-                  <option value="AGUARDANDO_PECA">⏳ Aguardando Peça</option>
-                  <option value="AGUARDANDO_CLIENTE">📞 Aguardando Cliente</option>
-                  <option value="CONCLUIDO">✅ Concluído</option>
+                  <option value="AGUARDANDO_PECAS">⏳ Aguardando Peça</option>
+                  <option value="CONCLUIDA">✅ Concluído</option>
+                  <option value="CANCELADA">❌ Cancelado</option>
                 </select>
               </div>
 

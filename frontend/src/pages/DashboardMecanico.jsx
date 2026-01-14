@@ -217,7 +217,12 @@ function DashboardMecanico() {
       // --- CALCULAR HORÁRIO DE FIM BASEADO NO TEMPO ESTIMADO ---
       const servicoSelecionado = servicos.find(s => s.id_servico === parseInt(novoAgendamento.servico));
 
-      const dataInicio = new Date(novoAgendamento.horario_inicio);
+      // CORREÇÃO: Não usar new Date() diretamente, usar o valor do input
+      const [dataStr, horaStr] = novoAgendamento.horario_inicio.split('T');
+      const [ano, mes, dia] = dataStr.split('-').map(Number);
+      const [hora, minuto] = horaStr.split(':').map(Number);
+
+      const dataInicio = new Date(ano, mes - 1, dia, hora, minuto, 0);
       let dataFim = new Date(dataInicio);
 
       // Extrair horas do tempo_estimado (ex: "2h" ou "1.5h")
@@ -228,15 +233,13 @@ function DashboardMecanico() {
           dataFim.setHours(dataFim.getHours() + Math.floor(horas));
           dataFim.setMinutes(dataFim.getMinutes() + Math.round((horas % 1) * 60));
         } else {
-          // Se não conseguir extrair, adiciona 1 hora por padrão
           dataFim.setHours(dataFim.getHours() + 1);
         }
       } else {
-        // Padrão: 1 hora se não houver tempo estimado
         dataFim.setHours(dataFim.getHours() + 1);
       }
 
-      // Formatar datas SEM timezone
+      // Formatar datas SEM timezone (usar horário local)
       const formatarDataLocal = (data) => {
         const ano = data.getFullYear();
         const mes = String(data.getMonth() + 1).padStart(2, '0');
@@ -256,7 +259,7 @@ function DashboardMecanico() {
         servico: parseInt(novoAgendamento.servico),
         preco: parseFloat(novoAgendamento.preco) || 0,
         horario_inicio: horarioInicioFormatado,
-        horario_fim: horarioFimFormatado, // <--- ADICIONAR
+        horario_fim: horarioFimFormatado,
         status: 'AGENDADO',
         mecanico: parseInt(mecId)
       };
@@ -1103,15 +1106,22 @@ function DashboardMecanico() {
 }
 
 function CardAgendamento({ agendamento, aoClicarGerarOS, aoClicarChecklist, aoClicarCancelar }) {
-  const dataFormatada = new Date(agendamento.horario_inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const diaMes = new Date(agendamento.horario_inicio).toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+  const dataInicio = new Date(agendamento.horario_inicio);
+  const dataFim = agendamento.horario_fim ? new Date(agendamento.horario_fim) : null;
+
+  const horaInicio = dataInicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const horaFim = dataFim ? dataFim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '?';
+  const diaMes = dataInicio.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
   return (
     <div className="bg-white p-4 shadow-md rounded-lg border-l-4 border-blue-500 flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
       <div>
         <div className="flex justify-between items-start mb-2">
           <div>
-            <span className="text-2xl font-bold text-gray-800">{dataFormatada}</span>
+            <span className="text-2xl font-bold text-gray-800">{horaInicio}</span>
+            {dataFim && (
+              <span className="text-sm text-gray-500 ml-1">até {horaFim}</span>
+            )}
             <span className="text-xs text-gray-400 ml-2 block">{diaMes}</span>
           </div>
           <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold">{agendamento.status}</span>

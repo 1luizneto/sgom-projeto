@@ -294,7 +294,7 @@ function HomeCliente() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
                                 <div>
                                     <p className="font-bold mb-1">Endereço:</p>
-                                    <p>Rua das Oficinas, 123 - Centro<br />São Paulo - SP, 01234-567</p>
+                                    <p>Rua das Oficinas, 123 - Centro<br />Campina Grande - PB, 01234-567</p>
                                 </div>
                                 <div>
                                     <p className="font-bold mb-1">Horário de Funcionamento:</p>

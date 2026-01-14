@@ -104,40 +104,59 @@ function DashboardMecanico() {
 
   // --- CARREGAR DADOS ---
   const carregarDadosIniciais = async () => {
-    try {
-      const resp = await Promise.all([
-        api.get('agendamentos/'),
-        api.get('servicos/'),
-        api.get('clientes/'),
-        api.get('mecanicos/'),
-        api.get('produtos/'),
-        api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] })),
-        api.get('ordens-servico/').catch(err => {
-          console.error('❌ Erro ao carregar OS:', err);
-          return { data: [] };
-        }),
-        api.get('checklists/').catch(() => ({ data: [] })),
-        api.get('orcamentos/').catch(() => ({ data: [] }))
-      ]);
+      try {
+        // 1. Primeiro, identificar qual mecânico está logado
+        const userName = localStorage.getItem('user_name');
+        const userId = localStorage.getItem('user_id');
+        
+        // 2. Buscar todos os mecânicos para encontrar o ID do logado
+        const mecanicosResp = await api.get('mecanicos/');
+        const mecanicoLogado = mecanicosResp.data.find(m => 
+          m.nome === userName || m.user === parseInt(userId)
+        );
 
-      console.log('📦 DADOS CARREGADOS:');
-      console.log('Ordens de Serviço:', resp[6].data);
-      console.log('Orçamentos:', resp[8].data);
-      console.log('Checklists:', resp[7].data);
+        console.log('👤 Mecânico logado:', mecanicoLogado);
 
-      setAgendamentos(resp[0].data);
-      setServicos(resp[1].data);
-      setClientes(resp[2].data);
-      setMecanicos(resp[3].data || []);
-      setProdutos(resp[4].data || []);
-      setNotificacoes(resp[5].data || []);
-      setOrdensServico(resp[6].data || []);
-      setChecklists(resp[7].data || []);
-      setOrcamentos(resp[8].data || []);
-    } catch (err) {
-      console.error('❌ Erro ao carregar dados:', err);
-      if (err.response?.status === 401) navigate('/');
-    }
+        if (!mecanicoLogado) {
+          alert('❌ Erro: Perfil de mecânico não encontrado!');
+          navigate('/');
+          return;
+        }
+
+        // 3. Carregar APENAS os agendamentos deste mecânico
+        const resp = await Promise.all([
+          api.get(`agendamentos/?mecanico=${mecanicoLogado.id_mecanico}`), // <--- FILTRO AQUI
+          api.get('servicos/'),
+          api.get('clientes/'),
+          api.get('produtos/'),
+          api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] })),
+          api.get('ordens-servico/').catch(err => {
+            console.error('❌ Erro ao carregar OS:', err);
+            return { data: [] };
+          }),
+          api.get('checklists/').catch(() => ({ data: [] })),
+          api.get('orcamentos/').catch(() => ({ data: [] }))
+        ]);
+
+        console.log('📦 DADOS CARREGADOS:');
+        console.log('Agendamentos do mecânico:', resp[0].data);
+        console.log('Ordens de Serviço:', resp[5].data);
+        console.log('Orçamentos:', resp[7].data);
+        console.log('Checklists:', resp[6].data);
+
+        setAgendamentos(resp[0].data);
+        setServicos(resp[1].data);
+        setClientes(resp[2].data);
+        setMecanicos(mecanicosResp.data);
+        setProdutos(resp[3].data || []);
+        setNotificacoes(resp[4].data || []);
+        setOrdensServico(resp[5].data || []);
+        setChecklists(resp[6].data || []);
+        setOrcamentos(resp[7].data || []);
+      } catch (err) {
+        console.error('❌ Erro ao carregar dados:', err);
+        if (err.response?.status === 401) navigate('/');
+      }
   };
 
   const carregarVeiculos = async (clienteId) => {

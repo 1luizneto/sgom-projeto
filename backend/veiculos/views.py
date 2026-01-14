@@ -22,9 +22,25 @@ class VeiculoViewSet(viewsets.ModelViewSet):
 
 # PB01/PB02: Agendamentos
 class AgendamentoViewSet(viewsets.ModelViewSet):
-    queryset = Agendamento.objects.all().select_related('cliente', 'veiculo', 'mecanico', 'servico')
+    queryset = Agendamento.objects.all()
     serializer_class = AgendamentoSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtrar por mecânico se o parâmetro for passado
+        mecanico_id = self.request.query_params.get('mecanico', None)
+        if mecanico_id:
+            queryset = queryset.filter(mecanico_id=mecanico_id)
+        
+        # Filtrar por cliente se o parâmetro for passado
+        cliente_id = self.request.query_params.get('cliente', None)
+        if cliente_id:
+            queryset = queryset.filter(cliente_id=cliente_id)
+        
+        return queryset.order_by('-horario_inicio')
 
     def update(self, request, *args, **kwargs):
         """Permitir atualização parcial e logar"""

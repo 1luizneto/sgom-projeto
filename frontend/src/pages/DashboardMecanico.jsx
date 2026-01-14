@@ -12,7 +12,7 @@ function DashboardMecanico() {
   const [mecanicos, setMecanicos] = useState([]);
   const [veiculosDoCliente, setVeiculosDoCliente] = useState([]);
   const [produtos, setProdutos] = useState([]);
-  const [notificacoes, setNotificacoes] = useState([]); // <--- NOVO: Notificações
+  const [notificacoes, setNotificacoes] = useState([]);
 
   // --- CONTROLE DOS MODAIS ---
   const [mostrarModalVeiculo, setMostrarModalVeiculo] = useState(false);
@@ -20,9 +20,12 @@ function DashboardMecanico() {
   const [mostrarModalOrcamento, setMostrarModalOrcamento] = useState(false);
   const [mostrarModalChecklist, setMostrarModalChecklist] = useState(false);
   const [mostrarModalVendaBalcao, setMostrarModalVendaBalcao] = useState(false);
-  const [mostrarModalEstoque, setMostrarModalEstoque] = useState(false); // <--- NOVO: Modal de Estoque
+  const [mostrarModalEstoque, setMostrarModalEstoque] = useState(false);
 
-  // --- NOVO: Filtro de Estoque Baixo (PB12 - TC12 Cenário 3) ---
+  // --- NOVO: Modal de Confirmação de Cancelamento ---
+  const [mostrarModalCancelamento, setMostrarModalCancelamento] = useState(false);
+  const [agendamentoParaCancelar, setAgendamentoParaCancelar] = useState(null);
+
   const [filtroEstoqueBaixo, setFiltroEstoqueBaixo] = useState(false);
 
   // --- FORMULÁRIOS ---
@@ -51,8 +54,6 @@ function DashboardMecanico() {
   });
 
   const [osAtual, setOsAtual] = useState(null);
-
-  // --- NOVO: Estado da Venda Balcão (PB07) ---
   const [carrinhoVenda, setCarrinhoVenda] = useState([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState('');
   const [quantidadeVenda, setQuantidadeVenda] = useState(1);
@@ -85,19 +86,41 @@ function DashboardMecanico() {
         api.get('clientes/'),
         api.get('mecanicos/'),
         api.get('produtos/'),
-        api.get('notificacoes/?nao_lidas=true')  // <--- NOVO: Carregar notificações não lidas
+        api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] }))
       ]);
       setAgendamentos(resp[0].data);
       setServicos(resp[1].data);
       setClientes(resp[2].data);
       setMecanicos(resp[3].data || []);
       setProdutos(resp[4].data || []);
-      setNotificacoes(resp[5].data || []); // <--- NOVO
+      setNotificacoes(resp[5].data || []);
 
       const user = localStorage.getItem('user_name');
       const eu = resp[3].data?.find(m => m.nome === user || m.user?.username === user);
       if (eu) setNovoAgendamento(prev => ({ ...prev, mecanico: eu.id_mecanico }));
     } catch (err) { if (err.response?.status === 401) navigate('/'); }
+  };
+
+  // --- NOVO: Função para solicitar cancelamento ---
+  const solicitarCancelamento = (agendamento) => {
+    setAgendamentoParaCancelar(agendamento);
+    setMostrarModalCancelamento(true);
+  };
+
+  // --- NOVO: Função para confirmar cancelamento ---
+  const confirmarCancelamento = async () => {
+    if (!agendamentoParaCancelar) return;
+
+    try {
+      await api.delete(`agendamentos/${agendamentoParaCancelar.id_agendamento}/`);
+      alert('Agendamento cancelado com sucesso!');
+      setMostrarModalCancelamento(false);
+      setAgendamentoParaCancelar(null);
+      carregarDadosIniciais();
+    } catch (err) {
+      console.error('Erro ao cancelar agendamento:', err);
+      alert('Erro ao cancelar agendamento.');
+    }
   };
 
   const carregarVeiculos = async (clienteId) => {
@@ -126,31 +149,15 @@ function DashboardMecanico() {
     try {
       const ano = new Date().getFullYear();
       const numeroOS = `OS-${ano}-${agendamento.id_agendamento}`;
-
       const mecId = mecanicos.find(m => m.nome === localStorage.getItem('user_name'))?.id_mecanico || mecanicos[0]?.id_mecanico;
 
-      const osPayload = {
-        numero_os: numeroOS,
-        veiculo: agendamento.veiculo,
-        mecanico_responsavel: mecId,
-        status: 'EM_ANDAMENTO'
-      };
-
+      const osPayload = { numero_os: numeroOS, veiculo: agendamento.veiculo, mecanico_responsavel: mecId, status: 'EM_ANDAMENTO' };
       const osResponse = await api.post('ordens-servico/', osPayload);
       const osId = osResponse.data.id_os;
 
       setOsAtual(osId);
-      setNovoChecklist({
-        os: osId,
-        nivel_combustivel: '',
-        avarias_lataria: '',
-        pneus_estado: 'Bom estado',
-        possivel_defeito: '',
-        observacoes: ''
-      });
-
+      setNovoChecklist({ os: osId, nivel_combustivel: '', avarias_lataria: '', pneus_estado: 'Bom estado', possivel_defeito: '', observacoes: '' });
       setMostrarModalChecklist(true);
-
     } catch (err) {
       console.error(err);
       alert('Erro ao preparar Check List. Verifique se a OS já existe.');
@@ -159,38 +166,19 @@ function DashboardMecanico() {
 
   const handleSalvarChecklist = async (e) => {
     e.preventDefault();
-
-    if (!novoChecklist.possivel_defeito.trim()) {
-      alert("É necessário informar o defeito relatado.");
-      return;
-    }
-
-    if (!novoChecklist.nivel_combustivel && !novoChecklist.avarias_lataria && !novoChecklist.pneus_estado) {
-      alert("É necessário informar o estado do veículo (combustível, avarias ou pneus).");
-      return;
-    }
+    if (!novoChecklist.possivel_defeito.trim()) { alert("É necessário informar o defeito relatado."); return; }
+    if (!novoChecklist.nivel_combustivel && !novoChecklist.avarias_lataria && !novoChecklist.pneus_estado) { alert("É necessário informar o estado do veículo."); return; }
 
     try {
       const mecId = mecanicos.find(m => m.nome === localStorage.getItem('user_name'))?.id_mecanico || mecanicos[0]?.id_mecanico;
-
-      const payload = {
-        ...novoChecklist,
-        mecanico: mecId,
-        data_criacao: new Date().toISOString()
-      };
-
+      const payload = { ...novoChecklist, mecanico: mecId, data_criacao: new Date().toISOString() };
       await api.post('checklists/', payload);
       alert('Check List de entrada salvo com sucesso!');
       setMostrarModalChecklist(false);
       carregarDadosIniciais();
-
     } catch (err) {
       console.error(err);
-      if (err.response?.data) {
-        alert(`Erro: ${JSON.stringify(err.response.data)}`);
-      } else {
-        alert('Erro ao salvar Check List.');
-      }
+      alert(err.response?.data ? `Erro: ${JSON.stringify(err.response.data)}` : 'Erro ao salvar Check List.');
     }
   };
 
@@ -224,10 +212,7 @@ function DashboardMecanico() {
       if (!mecId) { alert("Erro: Mecânico não identificado."); return; }
 
       let valorFinal = parseFloat(novoOrcamento.valor_total);
-      if (isNaN(valorFinal) || valorFinal <= 0) {
-        alert("Por favor, insira um valor total válido.");
-        return;
-      }
+      if (isNaN(valorFinal) || valorFinal <= 0) { alert("Por favor, insira um valor total válido."); return; }
 
       const payload = {
         cliente: parseInt(novoOrcamento.cliente),
@@ -243,7 +228,6 @@ function DashboardMecanico() {
       alert('OS/Orçamento enviado ao cliente com sucesso!');
       setMostrarModalOrcamento(false);
       carregarDadosIniciais();
-
     } catch (err) {
       console.error(err);
       alert('Erro ao criar OS.');
@@ -257,12 +241,8 @@ function DashboardMecanico() {
       alert('Veículo cadastrado!');
       setMostrarModalVeiculo(false);
       setNovoVeiculo({ cliente: '', placa: '', marca: '', modelo: '', cor: '', ano: '', tipo_combustivel: 'FLEX' });
-    } catch (e) {
-      alert('Erro ao cadastrar veículo.');
-    }
+    } catch (e) { alert('Erro ao cadastrar veículo.'); }
   };
-
-  // --- NOVO: Funções de Venda Balcão (PB07) ---
 
   const abrirModalVendaBalcao = () => {
     setCarrinhoVenda([]);
@@ -273,43 +253,18 @@ function DashboardMecanico() {
   };
 
   const adicionarProdutoCarrinho = () => {
-    if (!produtoSelecionado) {
-      alert('Selecione um produto.');
-      return;
-    }
-
+    if (!produtoSelecionado) { alert('Selecione um produto.'); return; }
     const produto = produtos.find(p => p.id_produto === parseInt(produtoSelecionado));
-
-    if (!produto) {
-      alert('Produto não encontrado.');
-      return;
-    }
-
-    if (quantidadeVenda > produto.estoque_atual) {
-      alert(`Quantidade solicitada superior ao estoque disponível (Atual: ${produto.estoque_atual})`);
-      return;
-    }
+    if (!produto) { alert('Produto não encontrado.'); return; }
+    if (quantidadeVenda > produto.estoque_atual) { alert(`Quantidade solicitada superior ao estoque disponível (Atual: ${produto.estoque_atual})`); return; }
 
     const itemExistente = carrinhoVenda.find(item => item.produto.id_produto === produto.id_produto);
-
     if (itemExistente) {
       const novaQtd = itemExistente.quantidade + quantidadeVenda;
-
-      if (novaQtd > produto.estoque_atual) {
-        alert(`Quantidade total no carrinho (${novaQtd}) superior ao estoque disponível (${produto.estoque_atual})`);
-        return;
-      }
-
-      setCarrinhoVenda(carrinhoVenda.map(item =>
-        item.produto.id_produto === produto.id_produto
-          ? { ...item, quantidade: novaQtd }
-          : item
-      ));
+      if (novaQtd > produto.estoque_atual) { alert(`Quantidade total no carrinho (${novaQtd}) superior ao estoque disponível (${produto.estoque_atual})`); return; }
+      setCarrinhoVenda(carrinhoVenda.map(item => item.produto.id_produto === produto.id_produto ? { ...item, quantidade: novaQtd } : item));
     } else {
-      setCarrinhoVenda([...carrinhoVenda, {
-        produto,
-        quantidade: quantidadeVenda
-      }]);
+      setCarrinhoVenda([...carrinhoVenda, { produto, quantidade: quantidadeVenda }]);
     }
 
     setProdutoSelecionado('');
@@ -321,16 +276,11 @@ function DashboardMecanico() {
   };
 
   const calcularTotal = () => {
-    return carrinhoVenda.reduce((total, item) =>
-      total + (parseFloat(item.produto.preco_venda) * item.quantidade), 0
-    ).toFixed(2);
+    return carrinhoVenda.reduce((total, item) => total + (parseFloat(item.produto.preco_venda) * item.quantidade), 0).toFixed(2);
   };
 
   const finalizarVenda = async () => {
-    if (carrinhoVenda.length === 0) {
-      alert('Adicione pelo menos um produto ao carrinho.');
-      return;
-    }
+    if (carrinhoVenda.length === 0) { alert('Adicione pelo menos um produto ao carrinho.'); return; }
 
     try {
       const payload = {
@@ -338,24 +288,16 @@ function DashboardMecanico() {
           produto: item.produto.id_produto,
           quantidade: item.quantidade,
           valor_unitario: parseFloat(item.produto.preco_venda)
-        })),
-        //valor_total: parseFloat(calcularTotal())
+        }))
       };
 
-      console.log('oPayload da venda:', JSON.stringify(payload, null, 2)); // <--- LOG DETALHADO
-
       await api.post('vendas/', payload);
-
       alert('Venda realizada com sucesso!');
       setMostrarModalVendaBalcao(false);
       carregarDadosIniciais();
-
     } catch (err) {
-      console.error(' Erro completo:', err);
-      console.error('Resposta do servidor:', err.response?.data); // <--- LOG DO ERRO
-
+      console.error('Erro completo:', err);
       if (err.response?.data) {
-        // Formata melhor a mensagem de erro
         const erros = JSON.stringify(err.response.data, null, 2);
         alert(`Erro ao finalizar venda:\n\n${erros}`);
       } else {
@@ -369,13 +311,11 @@ function DashboardMecanico() {
     p.descricao?.toLowerCase().includes(buscaProduto.toLowerCase())
   );
 
-  // --- NOVO: Função para abrir o modal de estoque ---
   const abrirModalEstoque = () => {
     setFiltroEstoqueBaixo(false);
     setMostrarModalEstoque(true);
   };
 
-  // --- NOVO: Função para marcar notificação como lida ---
   const marcarNotificacaoLida = async (idNotificacao) => {
     try {
       await api.post(`notificacoes/${idNotificacao}/marcar_lida/`);
@@ -385,12 +325,10 @@ function DashboardMecanico() {
     }
   };
 
-  // --- NOVO: Filtrar produtos por estoque baixo (TC12 - Cenário 3) ---
   const produtosFiltradosEstoque = filtroEstoqueBaixo
     ? produtos.filter(p => p.estoque_atual < p.estoque_minimo)
     : produtos;
 
-  // --- NOVO: Contar produtos com estoque baixo ---
   const produtosEstoqueBaixo = produtos.filter(p => p.estoque_atual < p.estoque_minimo);
 
   const handleLogout = () => { localStorage.removeItem('token'); navigate('/'); };
@@ -400,41 +338,39 @@ function DashboardMecanico() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-      <nav className="bg-white border-b px-6 py-4 flex justify-between shadow-sm sticky top-0 z-10">
-        <div><h1 className="text-xl font-bold text-gray-800">Oficina Dashboard</h1></div>
+      {/* NAVBAR ATUALIZADA - Igual ao DashboardAdmin */}
+      <nav className="bg-blue-800 text-white px-6 py-4 flex justify-between shadow-lg sticky top-0 z-10">
+        <h1 className="text-2xl font-bold">🛠️ Oficina Dashboard</h1>
         <div className="flex gap-4 items-center">
-          {/* NOVO: Badge de Notificações */}
           {notificacoes.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={abrirModalEstoque}
-                className="bg-red-100 text-red-700 px-4 py-2 rounded-lg font-bold hover:bg-red-200 flex items-center gap-2"
-              >
-                🔔 Alertas de Estoque
-                <span className="bg-red-600 text-white text-xs rounded-full px-2 py-1">
-                  {notificacoes.length}
-                </span>
-              </button>
-            </div>
+            <button
+              onClick={abrirModalEstoque}
+              className="bg-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-700 flex items-center gap-2"
+            >
+              🔔 Alertas
+              <span className="bg-white text-red-600 text-xs rounded-full px-2 py-1">
+                {notificacoes.length}
+              </span>
+            </button>
           )}
 
-          <button onClick={() => setMostrarModalVeiculo(true)} className="btn bg-indigo-50 text-indigo-700">+ Veículo</button>
-          <button onClick={() => setMostrarModalAgendamento(true)} className="btn bg-blue-600 text-white shadow-lg">+ Novo Agendamento</button>
-          <button onClick={abrirModalVendaBalcao} className="btn bg-green-600 text-white shadow-lg">💰 Venda Balcão</button>
-          <button onClick={abrirModalEstoque} className="btn bg-orange-600 text-white shadow-lg">
+          <button onClick={() => setMostrarModalVeiculo(true)} className="bg-indigo-600 px-4 py-2 rounded font-bold hover:bg-indigo-700">+ Veículo</button>
+          <button onClick={() => setMostrarModalAgendamento(true)} className="bg-blue-600 px-4 py-2 rounded font-bold hover:bg-blue-700">+ Novo Agendamento</button>
+          <button onClick={abrirModalVendaBalcao} className="bg-green-600 px-4 py-2 rounded font-bold hover:bg-green-700">💰 Venda Balcão</button>
+          <button onClick={abrirModalEstoque} className="bg-orange-600 px-4 py-2 rounded font-bold hover:bg-orange-700">
             📦 Estoque
             {produtosEstoqueBaixo.length > 0 && (
-              <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2">
+              <span className="ml-2 bg-white text-orange-600 text-xs rounded-full px-2">
                 {produtosEstoqueBaixo.length}
               </span>
             )}
           </button>
-          <button onClick={handleLogout} className="text-gray-400 font-bold ml-4">Sair</button>
+          <button onClick={handleLogout} className="text-gray-300 font-bold">Sair</button>
         </div>
       </nav>
 
       <main className="flex-1 p-8 max-w-7xl mx-auto w-full flex flex-col gap-8">
-        {/* NOVO: Alertas de Estoque Baixo (PB12 - TC12 Cenário 2) */}
+        {/* Alertas de Estoque */}
         {notificacoes.length > 0 && (
           <section className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow">
             <div className="flex items-center justify-between mb-3">
@@ -447,35 +383,17 @@ function DashboardMecanico() {
                 <div key={notif.id_notificacao} className="bg-white p-3 rounded border border-red-200 flex justify-between items-center">
                   <div>
                     <p className="font-bold text-red-700">{notif.mensagem}</p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(notif.data_criacao).toLocaleString('pt-BR')}
-                    </p>
+                    <p className="text-sm text-gray-500">{new Date(notif.data_criacao).toLocaleString('pt-BR')}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => marcarNotificacaoLida(notif.id_notificacao)}
-                      className="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300"
-                    >
-                      Dispensar
-                    </button>
-                    <button
-                      onClick={() => {
-                        setMostrarModalEstoque(true);
-                        marcarNotificacaoLida(notif.id_notificacao);
-                      }}
-                      className="text-sm bg-orange-600 text-white px-3 py-1 rounded hover:bg-orange-700"
-                    >
-                      Ver Estoque
-                    </button>
+                    <button onClick={() => marcarNotificacaoLida(notif.id_notificacao)} className="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300">Dispensar</button>
+                    <button onClick={() => { setMostrarModalEstoque(true); marcarNotificacaoLida(notif.id_notificacao); }} className="text-sm bg-orange-600 text-white px-3 py-1 rounded hover:bg-orange-700">Ver Estoque</button>
                   </div>
                 </div>
               ))}
             </div>
             {notificacoes.length > 3 && (
-              <button
-                onClick={abrirModalEstoque}
-                className="mt-3 text-sm text-red-700 font-bold hover:underline"
-              >
+              <button onClick={abrirModalEstoque} className="mt-3 text-sm text-red-700 font-bold hover:underline">
                 Ver todas ({notificacoes.length})
               </button>
             )}
@@ -491,6 +409,7 @@ function DashboardMecanico() {
                 agendamento={ag}
                 aoClicarGerarOS={() => abrirModalOS(ag)}
                 aoClicarChecklist={() => abrirModalChecklist(ag)}
+                aoClicarCancelar={() => solicitarCancelamento(ag)}
               />
             ))}
             {agendamentosHoje.length === 0 && <p className="text-gray-400">Vazio.</p>}
@@ -509,6 +428,7 @@ function DashboardMecanico() {
                 <div className="flex gap-2">
                   <button onClick={() => abrirModalChecklist(ag)} className="bg-purple-100 text-purple-700 px-3 py-1 rounded text-sm font-bold hover:bg-purple-200">Check List</button>
                   <button onClick={() => abrirModalOS(ag)} className="bg-orange-100 text-orange-700 px-3 py-1 rounded text-sm font-bold hover:bg-orange-200">Gerar OS</button>
+                  <button onClick={() => solicitarCancelamento(ag)} className="bg-red-100 text-red-700 px-3 py-1 rounded text-sm font-bold hover:bg-red-200">Cancelar</button>
                 </div>
               </div>
             ))}
@@ -516,123 +436,103 @@ function DashboardMecanico() {
         </section>
       </main>
 
-      {/* NOVO: MODAL DE MONITORAMENTO DE ESTOQUE (PB12) */}
+      {/* MODAL DE CONFIRMAÇÃO DE CANCELAMENTO */}
+      {mostrarModalCancelamento && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold mb-4 text-red-700">⚠️ Confirmar Cancelamento</h2>
+
+            {agendamentoParaCancelar && (
+              <div className="bg-gray-50 p-4 rounded-lg mb-6 border-l-4 border-red-500">
+                <p className="font-bold text-gray-800 mb-2">{agendamentoParaCancelar.cliente_nome}</p>
+                <p className="text-sm text-gray-600">{agendamentoParaCancelar.veiculo_modelo} - {agendamentoParaCancelar.veiculo_placa}</p>
+                <p className="text-sm text-gray-600 mt-1">📅 {new Date(agendamentoParaCancelar.horario_inicio).toLocaleString('pt-BR')}</p>
+                <p className="text-sm text-blue-600 font-bold mt-2">{agendamentoParaCancelar.servico_descricao}</p>
+              </div>
+            )}
+
+            <p className="text-gray-700 mb-6">
+              Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setMostrarModalCancelamento(false);
+                  setAgendamentoParaCancelar(null);
+                }}
+                className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300"
+              >
+                Não, Manter
+              </button>
+              <button
+                onClick={confirmarCancelamento}
+                className="flex-1 bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700"
+              >
+                Sim, Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE MONITORAMENTO DE ESTOQUE (PB12) */}
       {mostrarModalEstoque && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-5xl relative max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setMostrarModalEstoque(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl"
-            >
-              ✕
-            </button>
-
+            <button onClick={() => setMostrarModalEstoque(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">✕</button>
             <h2 className="text-2xl font-bold mb-6 text-orange-700">📦 Monitoramento de Estoque</h2>
 
-            {/* Filtros (TC12 - Cenário 3) */}
             <div className="flex gap-4 mb-6">
-              <button
-                onClick={() => setFiltroEstoqueBaixo(false)}
-                className={`px-4 py-2 rounded-lg font-bold ${!filtroEstoqueBaixo
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-              >
+              <button onClick={() => setFiltroEstoqueBaixo(false)} className={`px-4 py-2 rounded-lg font-bold ${!filtroEstoqueBaixo ? 'bg-orange-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
                 Todos os Produtos ({produtos.length})
               </button>
-              <button
-                onClick={() => setFiltroEstoqueBaixo(true)}
-                className={`px-4 py-2 rounded-lg font-bold ${filtroEstoqueBaixo
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-              >
+              <button onClick={() => setFiltroEstoqueBaixo(true)} className={`px-4 py-2 rounded-lg font-bold ${filtroEstoqueBaixo ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
                 🔴 Estoque Baixo ({produtosEstoqueBaixo.length})
               </button>
             </div>
 
-            {/* Lista de Produtos (TC12 - Cenário 1) */}
             <div className="space-y-3">
               {produtosFiltradosEstoque.length === 0 ? (
-                <p className="text-gray-400 text-center py-8">
-                  {filtroEstoqueBaixo
-                    ? '✅ Nenhum produto com estoque baixo'
-                    : 'Nenhum produto cadastrado'}
-                </p>
+                <p className="text-gray-400 text-center py-8">{filtroEstoqueBaixo ? '✅ Nenhum produto com estoque baixo' : 'Nenhum produto cadastrado'}</p>
               ) : (
                 produtosFiltradosEstoque.map(produto => {
                   const estoqueBaixo = produto.estoque_atual < produto.estoque_minimo;
                   const percentualEstoque = (produto.estoque_atual / produto.estoque_minimo) * 100;
 
                   return (
-                    <div
-                      key={produto.id_produto}
-                      className={`p-4 rounded-lg border-2 ${estoqueBaixo
-                          ? 'bg-red-50 border-red-300'
-                          : 'bg-white border-gray-200'
-                        }`}
-                    >
+                    <div key={produto.id_produto} className={`p-4 rounded-lg border-2 ${estoqueBaixo ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}>
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-bold text-gray-800">
-                              {produto.nome}
-                            </h3>
-                            {estoqueBaixo && (
-                              <span className="bg-red-600 text-white text-xs px-2 py-1 rounded font-bold">
-                                ⚠️ ESTOQUE BAIXO
-                              </span>
-                            )}
+                            <h3 className="text-lg font-bold text-gray-800">{produto.nome}</h3>
+                            {estoqueBaixo && <span className="bg-red-600 text-white text-xs px-2 py-1 rounded font-bold">⚠️ ESTOQUE BAIXO</span>}
                           </div>
-
-                          <p className="text-sm text-gray-600 mb-3">
-                            {produto.descricao || 'Sem descrição'}
-                          </p>
-
+                          <p className="text-sm text-gray-600 mb-3">{produto.descricao || 'Sem descrição'}</p>
                           <div className="grid grid-cols-3 gap-4">
                             <div>
                               <p className="text-xs text-gray-500">Estoque Atual</p>
-                              <p className={`text-2xl font-bold ${estoqueBaixo ? 'text-red-600' : 'text-green-600'
-                                }`}>
-                                {produto.estoque_atual} un.
-                              </p>
+                              <p className={`text-2xl font-bold ${estoqueBaixo ? 'text-red-600' : 'text-green-600'}`}>{produto.estoque_atual} un.</p>
                             </div>
-
                             <div>
                               <p className="text-xs text-gray-500">Estoque Mínimo</p>
-                              <p className="text-lg font-bold text-gray-700">
-                                {produto.estoque_minimo} un.
-                              </p>
+                              <p className="text-lg font-bold text-gray-700">{produto.estoque_minimo} un.</p>
                             </div>
-
                             <div>
                               <p className="text-xs text-gray-500">Fornecedor</p>
-                              <p className="text-sm font-bold text-gray-700">
-                                {produto.fornecedor_nome || 'N/A'}
-                              </p>
+                              <p className="text-sm font-bold text-gray-700">{produto.fornecedor_nome || 'N/A'}</p>
                             </div>
                           </div>
-
-                          {/* Barra de Progresso Visual (TC12 - Cenário 1) */}
                           <div className="mt-3">
                             <div className="w-full bg-gray-200 rounded-full h-3">
-                              <div
-                                className={`h-3 rounded-full transition-all ${estoqueBaixo ? 'bg-red-600' : 'bg-green-600'
-                                  }`}
-                                style={{ width: `${Math.min(percentualEstoque, 100)}%` }}
-                              />
+                              <div className={`h-3 rounded-full transition-all ${estoqueBaixo ? 'bg-red-600' : 'bg-green-600'}`} style={{ width: `${Math.min(percentualEstoque, 100)}%` }} />
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {percentualEstoque.toFixed(0)}% do estoque mínimo
-                            </p>
+                            <p className="text-xs text-gray-500 mt-1">{percentualEstoque.toFixed(0)}% do estoque mínimo</p>
                           </div>
                         </div>
-
                         <div className="text-right ml-4">
                           <p className="text-xs text-gray-500">Preço Venda</p>
-                          <p className="text-lg font-bold text-green-600">
-                            R$ {parseFloat(produto.preco_venda).toFixed(2)}
-                          </p>
+                          <p className="text-lg font-bold text-green-600">R$ {parseFloat(produto.preco_venda).toFixed(2)}</p>
                         </div>
                       </div>
                     </div>
@@ -641,7 +541,6 @@ function DashboardMecanico() {
               )}
             </div>
 
-            {/* Resumo */}
             <div className="mt-6 pt-4 border-t">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-blue-50 p-4 rounded-lg">
@@ -650,15 +549,11 @@ function DashboardMecanico() {
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600">Estoque OK</p>
-                  <p className="text-3xl font-bold text-green-600">
-                    {produtos.length - produtosEstoqueBaixo.length}
-                  </p>
+                  <p className="text-3xl font-bold text-green-600">{produtos.length - produtosEstoqueBaixo.length}</p>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600">Estoque Baixo</p>
-                  <p className="text-3xl font-bold text-red-600">
-                    {produtosEstoqueBaixo.length}
-                  </p>
+                  <p className="text-3xl font-bold text-red-600">{produtosEstoqueBaixo.length}</p>
                 </div>
               </div>
             </div>
@@ -1095,8 +990,7 @@ function DashboardMecanico() {
   );
 }
 
-// --- CARD AJUSTADO COM BOTÃO DE CHECK LIST ---
-function CardAgendamento({ agendamento, aoClicarGerarOS, aoClicarChecklist }) {
+function CardAgendamento({ agendamento, aoClicarGerarOS, aoClicarChecklist, aoClicarCancelar }) {
   const dataFormatada = new Date(agendamento.horario_inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const diaMes = new Date(agendamento.horario_inicio).toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 
@@ -1119,19 +1013,15 @@ function CardAgendamento({ agendamento, aoClicarGerarOS, aoClicarChecklist }) {
         </div>
       </div>
 
-      {/* Botões de Ação */}
       <div className="flex flex-col gap-2">
-        <button
-          onClick={aoClicarChecklist}
-          className="w-full bg-purple-50 text-purple-700 border border-purple-200 py-2 rounded font-bold text-sm hover:bg-purple-100 transition-colors"
-        >
+        <button onClick={aoClicarChecklist} className="w-full bg-purple-50 text-purple-700 border border-purple-200 py-2 rounded font-bold text-sm hover:bg-purple-100 transition-colors">
           📋 Check List de Entrada
         </button>
-        <button
-          onClick={aoClicarGerarOS}
-          className="w-full bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded font-bold text-sm hover:bg-orange-100 transition-colors"
-        >
+        <button onClick={aoClicarGerarOS} className="w-full bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded font-bold text-sm hover:bg-orange-100 transition-colors">
           📝 Gerar OS / Orçamento
+        </button>
+        <button onClick={aoClicarCancelar} className="w-full bg-red-50 text-red-700 border border-red-200 py-2 rounded font-bold text-sm hover:bg-red-100 transition-colors">
+          ❌ Cancelar Agendamento
         </button>
       </div>
     </div>

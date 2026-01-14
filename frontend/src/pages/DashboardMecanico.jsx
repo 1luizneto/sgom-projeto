@@ -184,22 +184,116 @@ function DashboardMecanico() {
 
   const handeCriaAgendamento = async (e) => {
     e.preventDefault();
+
     try {
       const mecId = novoAgendamento.mecanico || mecanicos[0]?.id_mecanico;
+
+      // VALIDAÇÕES
+      if (!novoAgendamento.cliente) {
+        alert('Selecione um cliente!');
+        return;
+      }
+
+      if (!novoAgendamento.veiculo) {
+        alert('Selecione um veículo!');
+        return;
+      }
+
+      if (!novoAgendamento.servico) {
+        alert('Selecione um serviço!');
+        return;
+      }
+
+      if (!novoAgendamento.horario_inicio) {
+        alert('Selecione data e hora!');
+        return;
+      }
+
+      if (!mecId) {
+        alert('Erro: Mecânico não identificado!');
+        return;
+      }
+
+      // --- CALCULAR HORÁRIO DE FIM BASEADO NO TEMPO ESTIMADO ---
+      const servicoSelecionado = servicos.find(s => s.id_servico === parseInt(novoAgendamento.servico));
+
+      const dataInicio = new Date(novoAgendamento.horario_inicio);
+      let dataFim = new Date(dataInicio);
+
+      // Extrair horas do tempo_estimado (ex: "2h" ou "1.5h")
+      if (servicoSelecionado?.tempo_estimado) {
+        const tempoMatch = servicoSelecionado.tempo_estimado.match(/(\d+\.?\d*)/);
+        if (tempoMatch) {
+          const horas = parseFloat(tempoMatch[1]);
+          dataFim.setHours(dataFim.getHours() + Math.floor(horas));
+          dataFim.setMinutes(dataFim.getMinutes() + Math.round((horas % 1) * 60));
+        } else {
+          // Se não conseguir extrair, adiciona 1 hora por padrão
+          dataFim.setHours(dataFim.getHours() + 1);
+        }
+      } else {
+        // Padrão: 1 hora se não houver tempo estimado
+        dataFim.setHours(dataFim.getHours() + 1);
+      }
+
+      // Formatar datas SEM timezone
+      const formatarDataLocal = (data) => {
+        const ano = data.getFullYear();
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const dia = String(data.getDate()).padStart(2, '0');
+        const hora = String(data.getHours()).padStart(2, '0');
+        const minuto = String(data.getMinutes()).padStart(2, '0');
+        const segundo = String(data.getSeconds()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}T${hora}:${minuto}:${segundo}`;
+      };
+
+      const horarioInicioFormatado = formatarDataLocal(dataInicio);
+      const horarioFimFormatado = formatarDataLocal(dataFim);
+
       const payload = {
         cliente: parseInt(novoAgendamento.cliente),
         veiculo: parseInt(novoAgendamento.veiculo),
         servico: parseInt(novoAgendamento.servico),
-        preco: parseFloat(novoAgendamento.preco),
-        horario_inicio: new Date(novoAgendamento.horario_inicio).toISOString(),
+        preco: parseFloat(novoAgendamento.preco) || 0,
+        horario_inicio: horarioInicioFormatado,
+        horario_fim: horarioFimFormatado, // <--- ADICIONAR
         status: 'AGENDADO',
         mecanico: parseInt(mecId)
       };
-      await api.post('agendamentos/', payload);
-      alert('Agendamento criado! Agora gere a OS para o cliente aprovar.');
+
+      console.log('📤 Payload que será enviado:', payload);
+      console.log(`⏰ Duração: ${servicoSelecionado?.tempo_estimado || '1h (padrão)'}`);
+
+      const response = await api.post('agendamentos/', payload);
+
+      console.log('✅ Resposta da API:', response.data);
+
+      alert(`Agendamento criado com sucesso!\n\n⏰ Início: ${dataInicio.toLocaleString('pt-BR')}\n⏱️ Fim: ${dataFim.toLocaleString('pt-BR')}\n📅 Duração: ${servicoSelecionado?.tempo_estimado || '1h'}`);
+
       setMostrarModalAgendamento(false);
+
+      // Limpar formulário
+      setNovoAgendamento({
+        cliente: '',
+        veiculo: '',
+        servico: '',
+        horario_inicio: '',
+        preco: '',
+        mecanico: mecId
+      });
+
       carregarDadosIniciais();
-    } catch (err) { alert('Erro ao agendar.'); }
+    } catch (err) {
+      console.error('❌ Erro completo:', err);
+      console.error('📋 Dados do erro:', err.response?.data);
+
+      if (err.response?.data) {
+        const erros = JSON.stringify(err.response.data, null, 2);
+        alert(`Erro ao criar agendamento:\n\n${erros}`);
+      } else {
+        alert('Erro ao agendar. Verifique o console.');
+      }
+    }
   };
 
   const handleCriaOrcamento = async (e) => {
@@ -435,19 +529,28 @@ function DashboardMecanico() {
         <section>
           <h3 className="text-lg font-bold text-gray-600 mb-4 border-b pb-2">Próximos Agendamentos</h3>
           <div className="grid grid-cols-1 gap-4">
-            {agendamentosFuturos.map(ag => (
-              <div key={ag.id_agendamento} className="bg-white p-4 rounded shadow flex justify-between items-center">
-                <div>
-                  <span className="font-bold">{new Date(ag.horario_inicio).toLocaleString()}</span> - {ag.cliente_nome} ({ag.veiculo_modelo})
-                  <div className="text-sm text-blue-600">{ag.servico_descricao}</div>
+            {agendamentosFuturos.map(ag => {
+              const inicio = new Date(ag.horario_inicio);
+              const fim = ag.horario_fim ? new Date(ag.horario_fim) : null;
+
+              return (
+                <div key={ag.id_agendamento} className="bg-white p-4 rounded shadow flex justify-between items-center">
+                  <div>
+                    <span className="font-bold">
+                      {inicio.toLocaleString('pt-BR')}
+                      {fim && ` - ${fim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+                    </span>
+                    {' '}- {ag.cliente_nome} ({ag.veiculo_modelo})
+                    <div className="text-sm text-blue-600">{ag.servico_descricao}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => abrirModalChecklist(ag)} className="bg-purple-100 text-purple-700 px-3 py-1 rounded text-sm font-bold hover:bg-purple-200">Check List</button>
+                    <button onClick={() => abrirModalOS(ag)} className="bg-orange-100 text-orange-700 px-3 py-1 rounded text-sm font-bold hover:bg-orange-200">Gerar OS</button>
+                    <button onClick={() => solicitarCancelamento(ag)} className="bg-red-100 text-red-700 px-3 py-1 rounded text-sm font-bold hover:bg-red-200">Cancelar</button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => abrirModalChecklist(ag)} className="bg-purple-100 text-purple-700 px-3 py-1 rounded text-sm font-bold hover:bg-purple-200">Check List</button>
-                  <button onClick={() => abrirModalOS(ag)} className="bg-orange-100 text-orange-700 px-3 py-1 rounded text-sm font-bold hover:bg-orange-200">Gerar OS</button>
-                  <button onClick={() => solicitarCancelamento(ag)} className="bg-red-100 text-red-700 px-3 py-1 rounded text-sm font-bold hover:bg-red-200">Cancelar</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </main>

@@ -567,7 +567,7 @@ function DashboardMecanico() {
         console.error('❌ OS não encontrada!');
         console.error('Orçamento procurado:', orcamento);
         console.error('Todas as OS:', ordensServico);
-        
+
         alert(`❌ Erro: Ordem de Serviço não encontrada!\n\nOrçamento: #${orcamento?.id_orcamento}\nVerifique se o orçamento foi aprovado corretamente.`);
         return;
       }
@@ -626,7 +626,7 @@ function DashboardMecanico() {
 
       // 2. Buscar o agendamento vinculado
       const orcamento = orcamentos.find(orc => orc.id_orcamento === osAtual.orcamento);
-      
+
       if (!orcamento) {
         console.error('❌ Orçamento não encontrado para esta OS');
         alert('⚠️ OS concluída, mas não foi possível atualizar o agendamento.');
@@ -665,13 +665,13 @@ function DashboardMecanico() {
     } catch (err) {
       console.error('❌ Erro ao concluir serviço:', err);
       console.error('Response data:', err.response?.data);
-      
-      alert('Erro ao concluir serviço: ' + 
-        (err.response?.data 
-          ? JSON.stringify(err.response.data) 
+
+      alert('Erro ao concluir serviço: ' +
+        (err.response?.data
+          ? JSON.stringify(err.response.data)
           : err.message));
     }
-  };  
+  };
 
   // FILTRAR AGENDAMENTOS CONCLUÍDOS
   const agendamentosConcluidos = agendamentos.filter(ag => ag.status === 'CONCLUIDO');
@@ -1594,7 +1594,7 @@ function DashboardMecanico() {
                   type="submit"
                   className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700"
                 >
-                  {novoStatusOS === 'CONCLUIDO' ? '✅ Finalizar Serviço' : '🔄 Atualizar Status'}
+                  {novoStatusOS === 'CONCLUIDA' ? '✅ Finalizar Serviço' : '🔄 Atualizar Status'}
                 </button>
               </div>
             </form>
@@ -1695,12 +1695,17 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
   const horaFim = dataFim ? dataFim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '?';
   const diaMes = dataInicio.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
-  const statusFluxo = orcamento
-    ? orcamento.status
-    : (temChecklist ? 'CHECKLIST_FEITO' : 'AGUARDANDO_CHECKLIST');
+  // ✅ ADICIONAR VERIFICAÇÃO DE STATUS CONCLUIDO
+  const estaConcluido = agendamento.status === 'CONCLUIDO';
+
+  const statusFluxo = estaConcluido
+    ? 'CONCLUIDO'  // <--- NOVO
+    : orcamento
+      ? orcamento.status
+      : (temChecklist ? 'CHECKLIST_FEITO' : 'AGUARDANDO_CHECKLIST');
 
   return (
-    <div className="bg-white p-4 shadow-md rounded-lg border-l-4 border-blue-500 flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
+    <div className={`bg-white p-4 shadow-md rounded-lg border-l-4 ${estaConcluido ? 'border-green-500' : 'border-blue-500'} flex flex-col justify-between h-full hover:shadow-lg transition-shadow`}>
       <div>
         <div className="flex justify-between items-start mb-2">
           <div>
@@ -1710,7 +1715,12 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
             )}
             <span className="text-xs text-gray-400 ml-2 block">{diaMes}</span>
           </div>
-          <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold">{agendamento.status}</span>
+          <span className={`text-xs px-2 py-1 rounded font-bold ${estaConcluido
+              ? 'bg-green-100 text-green-700'
+              : 'bg-gray-100 text-gray-600'
+            }`}>
+            {estaConcluido ? '✅ CONCLUÍDO' : agendamento.status}
+          </span>
         </div>
         <div className="mb-3">
           <h4 className="font-bold text-gray-900">{agendamento.cliente_nome}</h4>
@@ -1721,59 +1731,68 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
         </div>
 
         {/* INDICADORES DE STATUS */}
-        <div className="space-y-2 mb-4">
-          {/* Checklist */}
-          {temChecklist && (
-            <div className="bg-green-50 border border-green-200 rounded p-2 flex items-center gap-2">
-              <span className="text-green-600">✅</span>
-              <p className="text-xs text-green-700 font-bold">Check List Preenchido</p>
-            </div>
-          )}
-
-          {/* Orçamento */}
-          {orcamento && (
-            <div className={`border rounded p-2 flex items-center gap-2 ${orcamento.status === 'PENDENTE'
-              ? 'bg-yellow-50 border-yellow-200'
-              : orcamento.status === 'APROVADO'
-                ? 'bg-green-50 border-green-200'
-                : 'bg-red-50 border-red-200'
-              }`}>
-              <span className={
-                orcamento.status === 'PENDENTE'
-                  ? 'text-yellow-600'
-                  : orcamento.status === 'APROVADO'
-                    ? 'text-green-600'
-                    : 'text-red-600'
-              }>
-                {orcamento.status === 'PENDENTE' ? '⏳' : orcamento.status === 'APROVADO' ? '✅' : '❌'}
-              </span>
-              <div className="flex-1">
-                <p className={`text-xs font-bold ${orcamento.status === 'PENDENTE'
-                  ? 'text-yellow-700'
-                  : orcamento.status === 'APROVADO'
-                    ? 'text-green-700'
-                    : 'text-red-700'
-                  }`}>
-                  {orcamento.status === 'PENDENTE'
-                    ? `Orçamento #${orcamento.id_orcamento} - Aguardando Cliente`
-                    : orcamento.status === 'APROVADO'
-                      ? `Orçamento #${orcamento.id_orcamento} - Aprovado`
-                      : `Orçamento #${orcamento.id_orcamento} - Rejeitado`
-                  }
-                </p>
-                {orcamento.status === 'PENDENTE' && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Valor: R$ {parseFloat(orcamento.valor_total || 0).toFixed(2)}
-                  </p>
-                )}
+        {!estaConcluido && ( // <--- SÓ MOSTRAR SE NÃO ESTIVER CONCLUÍDO
+          <div className="space-y-2 mb-4">
+            {/* Checklist */}
+            {temChecklist && (
+              <div className="bg-green-50 border border-green-200 rounded p-2 flex items-center gap-2">
+                <span className="text-green-600">✅</span>
+                <p className="text-xs text-green-700 font-bold">Check List Preenchido</p>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {/* Orçamento */}
+            {orcamento && (
+              <div className={`border rounded p-2 flex items-center gap-2 ${orcamento.status === 'PENDENTE'
+                  ? 'bg-yellow-50 border-yellow-200'
+                  : orcamento.status === 'APROVADO'
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                <span className={
+                  orcamento.status === 'PENDENTE'
+                    ? 'text-yellow-600'
+                    : orcamento.status === 'APROVADO'
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                }>
+                  {orcamento.status === 'PENDENTE' ? '⏳' : orcamento.status === 'APROVADO' ? '✅' : '❌'}
+                </span>
+                <div className="flex-1">
+                  <p className={`text-xs font-bold ${orcamento.status === 'PENDENTE'
+                      ? 'text-yellow-700'
+                      : orcamento.status === 'APROVADO'
+                        ? 'text-green-700'
+                        : 'text-red-700'
+                    }`}>
+                    {orcamento.status === 'PENDENTE'
+                      ? `Orçamento #${orcamento.id_orcamento} - Aguardando Cliente`
+                      : orcamento.status === 'APROVADO'
+                        ? `Orçamento #${orcamento.id_orcamento} - Aprovado`
+                        : `Orçamento #${orcamento.id_orcamento} - Rejeitado`
+                    }
+                  </p>
+                  {orcamento.status === 'PENDENTE' && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Valor: R$ {parseFloat(orcamento.valor_total || 0).toFixed(2)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
-        {statusFluxo === 'AGUARDANDO_CHECKLIST' && (
+        {/* ✅ ADICIONAR CASO CONCLUÍDO */}
+        {statusFluxo === 'CONCLUIDO' && (
+          <div className="w-full bg-green-100 border-2 border-green-400 text-green-800 py-3 rounded-lg font-bold text-sm text-center">
+            🎉 Serviço Concluído
+          </div>
+        )}
+
+        {statusFluxo === 'AGUARDANDO_CHECKLIST' && !estaConcluido && (
           <button
             onClick={aoIniciarAtendimento}
             className="w-full bg-green-50 text-green-700 border border-green-200 py-2 rounded font-bold text-sm hover:bg-green-100 transition-colors"
@@ -1782,7 +1801,7 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
           </button>
         )}
 
-        {statusFluxo === 'CHECKLIST_FEITO' && (
+        {statusFluxo === 'CHECKLIST_FEITO' && !estaConcluido && (
           <button
             onClick={aoAbrirOrcamento}
             className="w-full bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded font-bold text-sm hover:bg-orange-100 transition-colors"
@@ -1791,13 +1810,13 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
           </button>
         )}
 
-        {statusFluxo === 'PENDENTE' && (
+        {statusFluxo === 'PENDENTE' && !estaConcluido && (
           <div className="w-full bg-yellow-50 text-yellow-700 border border-yellow-200 py-2 rounded font-bold text-sm text-center">
             ⏳ Aguardando Aprovação
           </div>
         )}
 
-        {statusFluxo === 'APROVADO' && (
+        {statusFluxo === 'APROVADO' && !estaConcluido && (
           <button
             onClick={aoIniciarServico}
             className="w-full bg-blue-50 text-blue-700 border border-blue-200 py-2 rounded font-bold text-sm hover:bg-blue-100 transition-colors"
@@ -1806,7 +1825,7 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
           </button>
         )}
 
-        {statusFluxo === 'REJEITADO' && (
+        {statusFluxo === 'REJEITADO' && !estaConcluido && (
           <button
             onClick={aoAbrirOrcamento}
             className="w-full bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded font-bold text-sm hover:bg-orange-100 transition-colors"
@@ -1815,12 +1834,14 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
           </button>
         )}
 
-        <button
-          onClick={aoClicarCancelar}
-          className="w-full bg-red-50 text-red-700 border border-red-200 py-2 rounded font-bold text-sm hover:bg-red-100 transition-colors"
-        >
-          ❌ Cancelar Agendamento
-        </button>
+        {!estaConcluido && ( // <--- SÓ PERMITIR CANCELAR SE NÃO ESTIVER CONCLUÍDO
+          <button
+            onClick={aoClicarCancelar}
+            className="w-full bg-red-50 text-red-700 border border-red-200 py-2 rounded font-bold text-sm hover:bg-red-100 transition-colors"
+          >
+            ❌ Cancelar Agendamento
+          </button>
+        )}
       </div>
     </div>
   );

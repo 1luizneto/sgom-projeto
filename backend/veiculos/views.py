@@ -26,6 +26,22 @@ class AgendamentoViewSet(viewsets.ModelViewSet):
     serializer_class = AgendamentoSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def update(self, request, *args, **kwargs):
+        """Permitir atualização parcial e logar"""
+        print(f"🔧 PATCH recebido para agendamento: {kwargs.get('pk')}")
+        print(f"📦 Dados recebidos: {request.data}")
+        
+        partial = kwargs.pop('partial', True)  # Forçar partial=True
+        instance = self.get_object()
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        print(f"✅ Agendamento atualizado: {serializer.data}")
+        
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
         agendamento = serializer.save()
         # notificação simples por email para o cliente (se email existir) e log para mecânico

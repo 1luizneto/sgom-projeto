@@ -14,27 +14,32 @@ class ItemMovimentacaoSerializer(serializers.ModelSerializer):
         fields = ['id_item', 'orcamento','produto', 'nome_produto', 'servico', 'nome_servico', 'quantidade', 'valor_unitario', 'subtotal']
 
 class OrcamentoSerializer(serializers.ModelSerializer):
-    # Permite ver e criar itens junto com o orçamento (Nested Serializer)
-    itens = ItemMovimentacaoSerializer(many=True, read_only=True)
-    veiculo_modelo = serializers.ReadOnlyField(source='veiculo.modelo')
-    veiculo_placa = serializers.ReadOnlyField(source='veiculo.placa')
-    cliente_nome = serializers.ReadOnlyField(source='cliente.nome')
+    veiculo_placa = serializers.CharField(source='veiculo.placa', read_only=True)
+    veiculo_modelo = serializers.CharField(source='veiculo.modelo', read_only=True)
+    mecanico_nome = serializers.CharField(source='mecanico.nome', read_only=True)
+    cliente_nome = serializers.CharField(source='cliente.nome', read_only=True)
+    valor_total = serializers.SerializerMethodField()
 
-    status = serializers.CharField(required=False)
-    
     class Meta:
         model = Orcamento
-        fields = '__all__'
-        read_only_fields = ['valor_total', 'status'] # Valor total é calculado pelo Signal
+        fields = [
+            'id_orcamento', 'veiculo', 'veiculo_placa', 'veiculo_modelo',
+            'mecanico', 'mecanico_nome', 'cliente', 'cliente_nome',  # <--- Adicione 'cliente'
+            'descricao', 'valor_total', 'validade', 'status',
+            'data_criacao'
+        ]
+        read_only_fields = ['data_criacao', 'valor_total', 'cliente']  # <--- cliente é read_only
 
-    def validate(self, data):
-        """
-        Aqui você pode adicionar validações extras se necessário.
-        A validação de 'Orçamento Vazio' é complexa de fazer na criação inicial 
-        se os itens forem enviados em endpoints separados. 
-        Geralmente validamos isso na transição de status (ex: ao tentar 'Aprovar').
-        """
-        return data
+    def get_valor_total(self, obj):
+        """Calcula o valor total dos itens do orçamento"""
+        return obj.calcular_total()
+
+    def create(self, validated_data):
+        """Preenche automaticamente o cliente a partir do veículo"""
+        veiculo = validated_data.get('veiculo')
+        if veiculo:
+            validated_data['cliente'] = veiculo.cliente
+        return super().create(validated_data)
 
 class LaudoTecnicoSerializer(serializers.ModelSerializer):
     # Campos informativos da OS (peças usadas)

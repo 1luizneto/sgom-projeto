@@ -336,6 +336,22 @@ function DashboardMecanico() {
   const agendamentosHoje = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje);
   const agendamentosFuturos = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') !== hoje);
 
+  // Dentro da função DashboardMecanico, modifique o useEffect:
+  useEffect(() => {
+    if (mecanicos.length > 0) {
+      const user = localStorage.getItem('user_name');
+      const eu = mecanicos.find(m => m.nome === user || m.user?.username === user);
+
+      if (eu) {
+        // Preenche o mecânico ao abrir o modal
+        setNovoAgendamento(prev => ({
+          ...prev,
+          mecanico: eu.id_mecanico
+        }));
+      }
+    }
+  }, [mecanicos]); // <--- Adicione esta dependência
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       {/* NAVBAR ATUALIZADA - Igual ao DashboardAdmin */}
@@ -837,24 +853,17 @@ function DashboardMecanico() {
             <h2 className="text-2xl font-bold mb-6 text-blue-700">📅 Novo Agendamento</h2>
 
             <form onSubmit={handeCriaAgendamento} className="flex flex-col gap-4">
-              {/* Mecânico Responsável */}
+              {/* Mecânico Responsável - TRAVADO */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Mecânico Responsável *
+                  Mecânico Responsável
                 </label>
-                <select
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={novoAgendamento.mecanico}
-                  onChange={e => setNovoAgendamento({ ...novoAgendamento, mecanico: e.target.value })}
-                  required
-                >
-                  <option value="">Selecione o mecânico...</option>
-                  {mecanicos.map(m => (
-                    <option key={m.id_mecanico} value={m.id_mecanico}>
-                      {m.nome}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-full p-3 bg-blue-50 border-2 border-blue-300 rounded-lg font-bold text-blue-800">
+                  {mecanicos.find(m => m.id_mecanico === parseInt(novoAgendamento.mecanico))?.nome || 'Carregando...'}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  ✓ Você está criando este agendamento
+                </p>
               </div>
 
               {/* Cliente */}
@@ -945,11 +954,11 @@ function DashboardMecanico() {
                   value={novoAgendamento.horario_inicio}
                   onChange={e => setNovoAgendamento({ ...novoAgendamento, horario_inicio: e.target.value })}
                   required
-                  min={new Date().toISOString().slice(0, 16)} // Não permite agendar no passado
+                  min={new Date().toISOString().slice(0, 16)}
                 />
               </div>
 
-              {/* Valor Estimado (auto-preenchido) */}
+              {/* Valor Estimado */}
               {novoAgendamento.preco && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <div className="flex justify-between items-center">

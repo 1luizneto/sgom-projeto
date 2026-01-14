@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 function DashboardFornecedor() {
-    const navigate = useNavigate();
-    const [produtos, setProdutos] = useState([]);
-    const [mostrarModal, setMostrarModal] = useState(false);
-    const [novoProduto, setNovoProduto] = useState({
+    const [pedidos, setPedidos] = useState([]);
+    const [pecas, setPecas] = useState([]);
+    const [abaSelecionada, setAbaSelecionada] = useState('pedidos');
+    const [mostrarModalNovaPeca, setMostrarModalNovaPeca] = useState(false);
+    const [novaPeca, setNovaPeca] = useState({
         nome: '',
         descricao: '',
         custo: '',
@@ -14,57 +15,102 @@ function DashboardFornecedor() {
         estoque_minimo: '',
         estoque_atual: ''
     });
+    const navigate = useNavigate();
+    const usuarioNome = localStorage.getItem('user_name') || 'Fornecedor';
 
     useEffect(() => {
         const token = localStorage.getItem('token');
         if (token) {
             api.defaults.headers.Authorization = `Bearer ${token}`;
-            carregarProdutos();
+            carregarPedidos();
+            carregarPecas();
         } else {
             navigate('/');
         }
     }, [navigate]);
 
-    const carregarProdutos = async () => {
+    const carregarPedidos = async () => {
+        try {
+            const response = await api.get('pedidos/');
+            console.log("📦 Pedidos recebidos:", response.data);
+            setPedidos(response.data);
+        } catch (err) {
+            console.error("Erro ao carregar pedidos", err);
+        }
+    };
+
+    const carregarPecas = async () => {
         try {
             const response = await api.get('produtos/');
-            setProdutos(response.data);
+            console.log("🔧 Peças recebidas:", response.data);
+            setPecas(response.data);
         } catch (err) {
-            console.error("Erro ao carregar produtos", err);
+            console.error("Erro ao carregar peças", err);
         }
     };
 
-    const handleChange = (e) => {
-        setNovoProduto({ ...novoProduto, [e.target.name]: e.target.value });
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-
-        // TC05 - Cenário 3: Validação no Frontend também
-        if (parseFloat(novoProduto.preco_venda) <= 0) {
-            alert("O preço de venda deve ser maior que zero.");
-            return;
-        }
+    const atualizarStatusPedido = async (id, novoStatus) => {
+        if (!window.confirm(`Confirmar mudança de status para "${novoStatus}"?`)) return;
 
         try {
-            await api.post('produtos/', novoProduto);
-            alert('Produto cadastrado com sucesso!');
-            setMostrarModal(false);
-            setNovoProduto({ nome: '', descricao: '', custo: '', preco_venda: '', estoque_minimo: '', estoque_atual: '' });
-            carregarProdutos();
+            await api.patch(`pedidos/${id}/`, { status: novoStatus });
+            alert(`Status atualizado para "${novoStatus}" com sucesso!`);
+            carregarPedidos();
         } catch (err) {
             console.error(err);
-            if (err.response?.data) {
-                const erros = err.response.data;
-                let msg = "Erro ao cadastrar:\n";
-                Object.keys(erros).forEach(key => {
-                    msg += `- ${key}: ${erros[key]}\n`;
-                });
-                alert(msg);
-            } else {
-                alert('Erro ao cadastrar produto.');
+            alert("Erro ao atualizar status do pedido.");
+        }
+    };
+
+    const cadastrarPeca = async (e) => {
+        e.preventDefault();
+
+        try {
+            // Pegar o ID do fornecedor logado
+            const userId = localStorage.getItem('user_id');
+            
+            // Buscar o fornecedor associado ao usuário
+            let fornecedorId = null;
+            try {
+                const fornecedoresResponse = await api.get('fornecedores/');
+                const fornecedor = fornecedoresResponse.data.find(f => f.user === parseInt(userId));
+                if (fornecedor) {
+                    fornecedorId = fornecedor.id_fornecedor;
+                }
+            } catch (err) {
+                console.error("Erro ao buscar fornecedor:", err);
             }
+
+            const produtoData = {
+                nome: novaPeca.nome,
+                descricao: novaPeca.descricao || '',
+                custo: parseFloat(novaPeca.custo) || 0,
+                preco_venda: parseFloat(novaPeca.preco_venda) || 0,
+                estoque_minimo: parseInt(novaPeca.estoque_minimo) || 0,
+                estoque_atual: parseInt(novaPeca.estoque_atual) || 0,
+                fornecedor: fornecedorId
+            };
+
+            console.log("📦 Enviando produto:", produtoData);
+
+            await api.post('produtos/', produtoData);
+            alert('Produto cadastrado com sucesso!');
+            setMostrarModalNovaPeca(false);
+            setNovaPeca({
+                nome: '',
+                descricao: '',
+                custo: '',
+                preco_venda: '',
+                estoque_minimo: '',
+                estoque_atual: ''
+            });
+            carregarPecas();
+        } catch (err) {
+            console.error("Erro completo:", err.response?.data || err);
+            const erroMsg = err.response?.data 
+                ? JSON.stringify(err.response.data, null, 2)
+                : 'Erro ao cadastrar produto.';
+            alert(`Erro: ${erroMsg}`);
         }
     };
 
@@ -73,99 +119,436 @@ function DashboardFornecedor() {
         navigate('/');
     };
 
+    const getStatusConfig = (status) => {
+        const configs = {
+            'PENDENTE': {
+                cor: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+                icone: '⏳',
+                titulo: 'Aguardando Processamento'
+            },
+            'EM_SEPARACAO': {
+                cor: 'bg-blue-100 text-blue-700 border-blue-300',
+                icone: '📦',
+                titulo: 'Em Separação'
+            },
+            'ENVIADO': {
+                cor: 'bg-purple-100 text-purple-700 border-purple-300',
+                icone: '🚚',
+                titulo: 'Enviado'
+            },
+            'ENTREGUE': {
+                cor: 'bg-green-100 text-green-700 border-green-300',
+                icone: '✅',
+                titulo: 'Entregue'
+            },
+            'CANCELADO': {
+                cor: 'bg-red-100 text-red-700 border-red-300',
+                icone: '❌',
+                titulo: 'Cancelado'
+            }
+        };
+
+        return configs[status] || {
+            cor: 'bg-gray-100 text-gray-700 border-gray-300',
+            icone: '📋',
+            titulo: status
+        };
+    };
+
+    const pedidosPendentes = pedidos.filter(p => p.status === 'PENDENTE');
+    const pedidosEmAndamento = pedidos.filter(p => ['EM_SEPARACAO', 'ENVIADO'].includes(p.status));
+    const pedidosFinalizados = pedidos.filter(p => ['ENTREGUE', 'CANCELADO'].includes(p.status));
+
     return (
-        <div className="min-h-screen bg-gray-50 font-sans">
-            <nav className="bg-white px-6 py-4 shadow-sm flex justify-between items-center">
-                <h1 className="text-xl font-bold text-gray-800">Painel do Fornecedor</h1>
-                <div className="flex items-center gap-4">
-                    <button onClick={() => setMostrarModal(true)} className="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700">
-                        + Cadastrar Produto
-                    </button>
-                    <button onClick={handleLogout} className="text-red-500 font-bold text-sm hover:underline">Sair</button>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+            {/* HEADER ATUALIZADO - Padrão das outras dashboards */}
+            <header className="bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
+                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <span className="text-3xl">📦</span>
+                        <h1 className="text-2xl font-bold">Painel do Fornecedor</h1>
+                    </div>
+                    <div className="flex items-center gap-6">
+                        <div className="text-right">
+                            <p className="text-xs text-blue-200">Bem-vindo(a)</p>
+                            <p className="font-bold">{usuarioNome}</p>
+                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
+                        >
+                            🚪 Sair
+                        </button>
+                    </div>
                 </div>
-            </nav>
+            </header>
 
             <main className="max-w-7xl mx-auto p-6">
-                <h2 className="text-2xl font-bold text-gray-700 mb-6">Meus Produtos</h2>
+                {/* Sistema de Abas */}
+                <div className="bg-white rounded-t-lg shadow-sm border-b flex gap-1 p-1 mb-6">
+                    <button
+                        onClick={() => setAbaSelecionada('pedidos')}
+                        className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'pedidos'
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            }`}
+                    >
+                        📦 Pedidos
+                        <span className={`ml-2 px-2 py-1 rounded-full text-xs font-bold ${abaSelecionada === 'pedidos' ? 'bg-white text-blue-600' : 'bg-gray-200 text-gray-700'
+                            }`}>
+                            {pedidos.length}
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setAbaSelecionada('catalogo')}
+                        className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'catalogo'
+                                ? 'bg-green-600 text-white shadow-md'
+                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            }`}
+                    >
+                        🔧 Catálogo de Peças
+                        <span className={`ml-2 px-2 py-1 rounded-full text-xs font-bold ${abaSelecionada === 'catalogo' ? 'bg-white text-green-600' : 'bg-gray-200 text-gray-700'
+                            }`}>
+                            {pecas.length}
+                        </span>
+                    </button>
+                </div>
 
-                {produtos.length === 0 ? (
-                    <div className="bg-white p-8 rounded shadow text-center text-gray-400">
-                        Você ainda não cadastrou nenhum produto.
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {produtos.map((prod) => (
-                            <div key={prod.id_produto} className="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
-                                <h3 className="text-lg font-bold text-gray-800 mb-2">{prod.nome}</h3>
-                                <p className="text-sm text-gray-600 mb-3">{prod.descricao || 'Sem descrição'}</p>
-
-                                <div className="grid grid-cols-2 gap-2 text-sm">
+                {/* ABA: PEDIDOS */}
+                {abaSelecionada === 'pedidos' && (
+                    <div>
+                        {/* Estatísticas Rápidas */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-l-4 border-yellow-500 p-4 rounded-lg shadow-md">
+                                <div className="flex items-center justify-between">
                                     <div>
-                                        <span className="font-bold text-gray-500">Custo:</span>
-                                        <p className="text-blue-600">R$ {parseFloat(prod.custo).toFixed(2)}</p>
+                                        <p className="text-yellow-700 text-sm font-bold">Pendentes</p>
+                                        <p className="text-3xl font-bold text-yellow-800">{pedidosPendentes.length}</p>
                                     </div>
-                                    <div>
-                                        <span className="font-bold text-gray-500">Venda:</span>
-                                        <p className="text-green-600 font-bold">R$ {parseFloat(prod.preco_venda).toFixed(2)}</p>
-                                    </div>
-                                    <div>
-                                        <span className="font-bold text-gray-500">Estoque:</span>
-                                        <p>{prod.estoque_atual} un.</p>
-                                    </div>
-                                    <div>
-                                        <span className="font-bold text-gray-500">Mínimo:</span>
-                                        <p className="text-orange-600">{prod.estoque_minimo} un.</p>
-                                    </div>
+                                    <span className="text-5xl">⏳</span>
                                 </div>
                             </div>
-                        ))}
+
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-500 p-4 rounded-lg shadow-md">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-blue-700 text-sm font-bold">Em Andamento</p>
+                                        <p className="text-3xl font-bold text-blue-800">{pedidosEmAndamento.length}</p>
+                                    </div>
+                                    <span className="text-5xl">🚚</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-500 p-4 rounded-lg shadow-md">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-green-700 text-sm font-bold">Finalizados</p>
+                                        <p className="text-3xl font-bold text-green-800">{pedidosFinalizados.length}</p>
+                                    </div>
+                                    <span className="text-5xl">✅</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Lista de Pedidos */}
+                        <div className="mb-6 flex items-center gap-3">
+                            <span className="text-4xl">📦</span>
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800">Gerenciar Pedidos</h2>
+                                <p className="text-sm text-gray-500">Atualize o status dos pedidos recebidos</p>
+                            </div>
+                        </div>
+
+                        {pedidos.length === 0 ? (
+                            <div className="bg-white p-12 rounded-lg shadow text-center">
+                                <span className="text-6xl mb-4 block">📭</span>
+                                <p className="text-gray-400 text-lg">Nenhum pedido registrado no momento.</p>
+                            </div>
+                        ) : (
+                            <div className="grid gap-4">
+                                {pedidos.map((pedido) => {
+                                    const statusConfig = getStatusConfig(pedido.status);
+
+                                    return (
+                                        <div key={pedido.id_pedido} className={`bg-white rounded-lg shadow-md border-l-4 overflow-hidden hover:shadow-lg transition-shadow ${statusConfig.cor.replace('bg-', 'border-')}`}>
+                                            {/* Cabeçalho do Pedido */}
+                                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b flex justify-between items-center">
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                                        📦 Pedido #{pedido.id_pedido}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-600 mt-1">
+                                                        Data: {new Date(pedido.data_pedido).toLocaleDateString('pt-BR')}
+                                                    </p>
+                                                </div>
+                                                <div className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${statusConfig.cor}`}>
+                                                    <span className="text-xl">{statusConfig.icone}</span>
+                                                    {statusConfig.titulo}
+                                                </div>
+                                            </div>
+
+                                            {/* Conteúdo do Pedido */}
+                                            <div className="p-6">
+                                                <div className="mb-4">
+                                                    <p className="text-sm text-gray-500 mb-2">Itens do Pedido:</p>
+                                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                                        <p className="text-gray-700">{pedido.descricao || 'Descrição não informada'}</p>
+                                                    </div>
+                                                </div>
+
+                                                {pedido.data_entrega && (
+                                                    <div className="bg-blue-50 px-4 py-2 rounded-lg inline-block mb-4">
+                                                        <p className="text-xs text-blue-600 font-bold">Previsão de Entrega</p>
+                                                        <p className="text-sm font-bold text-blue-700">
+                                                            {new Date(pedido.data_entrega).toLocaleDateString('pt-BR')}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* Ações */}
+                                                <div className="flex gap-2 flex-wrap pt-4 border-t">
+                                                    {pedido.status === 'PENDENTE' && (
+                                                        <button
+                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'EM_SEPARACAO')}
+                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
+                                                        >
+                                                            📦 Iniciar Separação
+                                                        </button>
+                                                    )}
+
+                                                    {pedido.status === 'EM_SEPARACAO' && (
+                                                        <button
+                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'ENVIADO')}
+                                                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
+                                                        >
+                                                            🚚 Marcar como Enviado
+                                                        </button>
+                                                    )}
+
+                                                    {pedido.status === 'ENVIADO' && (
+                                                        <button
+                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'ENTREGUE')}
+                                                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
+                                                        >
+                                                            ✅ Confirmar Entrega
+                                                        </button>
+                                                    )}
+
+                                                    {!['ENTREGUE', 'CANCELADO'].includes(pedido.status) && (
+                                                        <button
+                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'CANCELADO')}
+                                                            className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2"
+                                                        >
+                                                            ❌ Cancelar Pedido
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ABA: CATÁLOGO DE PEÇAS */}
+                {abaSelecionada === 'catalogo' && (
+                    <div>
+                        <div className="mb-6 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <span className="text-4xl">🔧</span>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-800">Catálogo de Peças</h2>
+                                    <p className="text-sm text-gray-500">Gerencie o estoque e preços das peças</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setMostrarModalNovaPeca(true)}
+                                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold shadow-md flex items-center gap-2 transition-colors"
+                            >
+                                ➕ Cadastrar Peça
+                            </button>
+                        </div>
+
+                        {pecas.length === 0 ? (
+                            <div className="bg-white p-12 rounded-lg shadow text-center">
+                                <span className="text-6xl mb-4 block">🔧</span>
+                                <p className="text-gray-400 text-lg mb-4">Nenhuma peça cadastrada no catálogo.</p>
+                                <button
+                                    onClick={() => setMostrarModalNovaPeca(true)}
+                                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold shadow-md inline-flex items-center gap-2 transition-colors"
+                                >
+                                    ➕ Cadastrar Primeira Peça
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {pecas.map((peca) => (
+                                    <div key={peca.id_peca} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4 border-blue-600 overflow-hidden">
+                                        <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-3 border-b">
+                                            <h3 className="font-bold text-gray-800 text-lg">{peca.nome}</h3>
+                                            <p className="text-xs text-gray-500">Código: {peca.codigo || peca.id_peca}</p>
+                                        </div>
+
+                                        <div className="p-4">
+                                            <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                                                {peca.descricao || 'Sem descrição'}
+                                            </p>
+
+                                            <div className="flex justify-between items-center mb-3 pb-3 border-b">
+                                                <div>
+                                                    <p className="text-xs text-gray-500">Estoque</p>
+                                                    <p className={`text-lg font-bold ${peca.estoque_atual > 10 ? 'text-green-600' : peca.estoque_atual > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                        {peca.estoque_atual || 0} un.
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xs text-gray-500">Preço</p>
+                                                    <p className="text-lg font-bold text-blue-700">
+                                                        R$ {parseFloat(peca.preco_venda || 0).toFixed(2)}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className={`text-xs px-3 py-1 rounded-full text-center font-bold ${peca.estoque_atual > 10
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : peca.estoque_atual > 0
+                                                        ? 'bg-yellow-100 text-yellow-700'
+                                                        : 'bg-red-100 text-red-700'
+                                                }`}>
+                                                {peca.estoque_atual > 10 ? '✅ Em Estoque' : peca.estoque_atual > 0 ? '⚠️ Estoque Baixo' : '❌ Sem Estoque'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </main>
 
-            {/* MODAL DE CADASTRO */}
-            {mostrarModal && (
+            {/* MODAL: CADASTRAR NOVA PEÇA */}
+            {mostrarModalNovaPeca && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg relative">
-                        <button onClick={() => setMostrarModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">✕</button>
-                        <h2 className="text-xl font-bold mb-4 text-green-700">Cadastrar Novo Produto</h2>
-
-                        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                            <div>
-                                <label className="text-sm font-bold text-gray-600">Nome do Produto *</label>
-                                <input type="text" name="nome" className="w-full p-2 border rounded" placeholder="Ex: Filtro de Óleo AB-200" onChange={handleChange} required />
-                            </div>
-
-                            <div>
-                                <label className="text-sm font-bold text-gray-600">Descrição</label>
-                                <textarea name="descricao" className="w-full p-2 border rounded h-20" placeholder="Detalhes do produto..." onChange={handleChange} />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-sm font-bold text-gray-600">Custo (R$) *</label>
-                                    <input type="number" step="0.01" name="custo" className="w-full p-2 border rounded" placeholder="0.00" onChange={handleChange} required />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-bold text-gray-600">Preço Venda (R$) *</label>
-                                    <input type="number" step="0.01" name="preco_venda" className="w-full p-2 border rounded" placeholder="0.00" onChange={handleChange} required />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-sm font-bold text-gray-600">Estoque Mínimo *</label>
-                                    <input type="number" name="estoque_minimo" className="w-full p-2 border rounded" placeholder="10" onChange={handleChange} required />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-bold text-gray-600">Estoque Atual</label>
-                                    <input type="number" name="estoque_atual" className="w-full p-2 border rounded" placeholder="50" onChange={handleChange} />
-                                </div>
-                            </div>
-
-                            <button type="submit" className="mt-4 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 shadow-md">
-                                Cadastrar Produto
+                    <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 flex justify-between items-center sticky top-0">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                ➕ Cadastrar Nova Peça
+                            </h2>
+                            <button
+                                onClick={() => setMostrarModalNovaPeca(false)}
+                                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+                            >
+                                ✕
                             </button>
+                        </div>
+
+                        <form onSubmit={cadastrarPeca} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Nome da Peça *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={novaPeca.nome}
+                                    onChange={(e) => setNovaPeca({ ...novaPeca, nome: e.target.value })}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    placeholder="Ex: Filtro de Óleo"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Descrição
+                                </label>
+                                <textarea
+                                    value={novaPeca.descricao}
+                                    onChange={(e) => setNovaPeca({ ...novaPeca, descricao: e.target.value })}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    placeholder="Descrição detalhada da peça..."
+                                    rows="3"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Custo (R$) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={novaPeca.custo}
+                                        onChange={(e) => setNovaPeca({ ...novaPeca, custo: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        placeholder="0.00"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Preço de Venda (R$) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={novaPeca.preco_venda}
+                                        onChange={(e) => setNovaPeca({ ...novaPeca, preco_venda: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        placeholder="0.00"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Estoque Mínimo *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={novaPeca.estoque_minimo}
+                                        onChange={(e) => setNovaPeca({ ...novaPeca, estoque_minimo: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        placeholder="0"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Estoque Atual *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={novaPeca.estoque_atual}
+                                        onChange={(e) => setNovaPeca({ ...novaPeca, estoque_atual: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        placeholder="0"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-4 border-t">
+                                <button
+                                    type="button"
+                                    onClick={() => setMostrarModalNovaPeca(false)}
+                                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-bold transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow-md transition-colors"
+                                >
+                                    ✓ Cadastrar Peça
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>

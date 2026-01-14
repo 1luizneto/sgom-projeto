@@ -178,7 +178,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         user_name = user.username
 
         # Verifica tipo de usuário
-        if user.is_staff or user.is_superuser:  # <--- VERIFICAR ADMIN PRIMEIRO
+        if user.is_staff or user.is_superuser:  
             is_admin = True
             if hasattr(user, 'administrador'):
                 user_name = user.administrador.nome
@@ -198,7 +198,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['is_mecanico'] = is_mecanico
         data['is_cliente'] = is_cliente
         data['is_fornecedor'] = is_fornecedor
-        data['is_admin'] = is_admin  # <--- ADICIONE
+        data['is_admin'] = is_admin  
         data['user_name'] = user_name
 
         return data

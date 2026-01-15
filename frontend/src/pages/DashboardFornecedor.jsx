@@ -31,8 +31,8 @@ function DashboardFornecedor() {
 
     const carregarPedidos = async () => {
         try {
-            const response = await api.get('pedidos/');
-            console.log("📦 Pedidos recebidos:", response.data);
+            const response = await api.get('pedidos-compra/');
+            console.log("📦 Pedidos de compra recebidos:", response.data);
             setPedidos(response.data);
         } catch (err) {
             console.error("Erro ao carregar pedidos", err);
@@ -68,7 +68,7 @@ function DashboardFornecedor() {
         try {
             // Pegar o ID do fornecedor logado
             const userId = localStorage.getItem('user_id');
-            
+
             // Buscar o fornecedor associado ao usuário
             let fornecedorId = null;
             try {
@@ -107,7 +107,7 @@ function DashboardFornecedor() {
             carregarPecas();
         } catch (err) {
             console.error("Erro completo:", err.response?.data || err);
-            const erroMsg = err.response?.data 
+            const erroMsg = err.response?.data
                 ? JSON.stringify(err.response.data, null, 2)
                 : 'Erro ao cadastrar produto.';
             alert(`Erro: ${erroMsg}`);
@@ -155,6 +155,32 @@ function DashboardFornecedor() {
         };
     };
 
+    const aprovarPedido = async (id) => {
+        if (!confirm('Aprovar este pedido? Seu estoque será reduzido.')) return;
+
+        try {
+            await api.post(`pedidos-compra/${id}/aprovar/`);
+            alert('✅ Pedido aprovado! Estoque atualizado.');
+            carregarPedidos();
+            carregarPecas();
+        } catch (err) {
+            alert(`Erro: ${err.response?.data?.erro || 'Erro ao aprovar pedido'}`);
+        }
+    };
+
+    const rejeitarPedido = async (id) => {
+        const motivo = prompt('Motivo da rejeição:');
+        if (!motivo) return;
+
+        try {
+            await api.post(`pedidos-compra/${id}/rejeitar/`, { motivo });
+            alert('❌ Pedido rejeitado.');
+            carregarPedidos();
+        } catch (err) {
+            alert('Erro ao rejeitar pedido.');
+        }
+    };
+
     const pedidosPendentes = pedidos.filter(p => p.status === 'PENDENTE');
     const pedidosEmAndamento = pedidos.filter(p => ['EM_SEPARACAO', 'ENVIADO'].includes(p.status));
     const pedidosFinalizados = pedidos.filter(p => ['ENTREGUE', 'CANCELADO'].includes(p.status));
@@ -189,8 +215,8 @@ function DashboardFornecedor() {
                     <button
                         onClick={() => setAbaSelecionada('pedidos')}
                         className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'pedidos'
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         📦 Pedidos
@@ -202,8 +228,8 @@ function DashboardFornecedor() {
                     <button
                         onClick={() => setAbaSelecionada('catalogo')}
                         className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'catalogo'
-                                ? 'bg-green-600 text-white shadow-md'
-                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            ? 'bg-green-600 text-white shadow-md'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         🔧 Catálogo de Peças
@@ -270,80 +296,38 @@ function DashboardFornecedor() {
                                     const statusConfig = getStatusConfig(pedido.status);
 
                                     return (
-                                        <div key={pedido.id_pedido} className={`bg-white rounded-lg shadow-md border-l-4 overflow-hidden hover:shadow-lg transition-shadow ${statusConfig.cor.replace('bg-', 'border-')}`}>
-                                            {/* Cabeçalho do Pedido */}
-                                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b flex justify-between items-center">
+                                        <div key={pedido.id_pedido} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-600">
+                                            <div className="flex justify-between items-start mb-4">
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                                        📦 Pedido #{pedido.id_pedido}
-                                                    </h3>
-                                                    <p className="text-sm text-gray-600 mt-1">
-                                                        Data: {new Date(pedido.data_pedido).toLocaleDateString('pt-BR')}
-                                                    </p>
+                                                    <h3 className="text-lg font-bold">📦 {pedido.produto_nome}</h3>
+                                                    <p className="text-sm text-gray-600">Quantidade: {pedido.quantidade} un.</p>
+                                                    <p className="text-sm text-gray-600">Valor Total: R$ {parseFloat(pedido.valor_total).toFixed(2)}</p>
+                                                    <p className="text-xs text-gray-500">{new Date(pedido.data_pedido).toLocaleString('pt-BR')}</p>
                                                 </div>
-                                                <div className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${statusConfig.cor}`}>
-                                                    <span className="text-xl">{statusConfig.icone}</span>
-                                                    {statusConfig.titulo}
-                                                </div>
+                                                <span className={`px-3 py-1 rounded-full text-sm font-bold ${pedido.status === 'PENDENTE' ? 'bg-yellow-200 text-yellow-800' :
+                                                        pedido.status === 'APROVADO' ? 'bg-green-200 text-green-800' :
+                                                            'bg-red-200 text-red-800'
+                                                    }`}>
+                                                    {pedido.status}
+                                                </span>
                                             </div>
 
-                                            {/* Conteúdo do Pedido */}
-                                            <div className="p-6">
-                                                <div className="mb-4">
-                                                    <p className="text-sm text-gray-500 mb-2">Itens do Pedido:</p>
-                                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                                        <p className="text-gray-700">{pedido.descricao || 'Descrição não informada'}</p>
-                                                    </div>
+                                            {pedido.status === 'PENDENTE' && (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => aprovarPedido(pedido.id_pedido)}
+                                                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold"
+                                                    >
+                                                        ✅ Aprovar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => rejeitarPedido(pedido.id_pedido)}
+                                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold"
+                                                    >
+                                                        ❌ Rejeitar
+                                                    </button>
                                                 </div>
-
-                                                {pedido.data_entrega && (
-                                                    <div className="bg-blue-50 px-4 py-2 rounded-lg inline-block mb-4">
-                                                        <p className="text-xs text-blue-600 font-bold">Previsão de Entrega</p>
-                                                        <p className="text-sm font-bold text-blue-700">
-                                                            {new Date(pedido.data_entrega).toLocaleDateString('pt-BR')}
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {/* Ações */}
-                                                <div className="flex gap-2 flex-wrap pt-4 border-t">
-                                                    {pedido.status === 'PENDENTE' && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'EM_SEPARACAO')}
-                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
-                                                        >
-                                                            📦 Iniciar Separação
-                                                        </button>
-                                                    )}
-
-                                                    {pedido.status === 'EM_SEPARACAO' && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'ENVIADO')}
-                                                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
-                                                        >
-                                                            🚚 Marcar como Enviado
-                                                        </button>
-                                                    )}
-
-                                                    {pedido.status === 'ENVIADO' && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'ENTREGUE')}
-                                                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
-                                                        >
-                                                            ✅ Confirmar Entrega
-                                                        </button>
-                                                    )}
-
-                                                    {!['ENTREGUE', 'CANCELADO'].includes(pedido.status) && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'CANCELADO')}
-                                                            className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2"
-                                                        >
-                                                            ❌ Cancelar Pedido
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -412,10 +396,10 @@ function DashboardFornecedor() {
                                             </div>
 
                                             <div className={`text-xs px-3 py-1 rounded-full text-center font-bold ${peca.estoque_atual > 10
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : peca.estoque_atual > 0
-                                                        ? 'bg-yellow-100 text-yellow-700'
-                                                        : 'bg-red-100 text-red-700'
+                                                ? 'bg-green-100 text-green-700'
+                                                : peca.estoque_atual > 0
+                                                    ? 'bg-yellow-100 text-yellow-700'
+                                                    : 'bg-red-100 text-red-700'
                                                 }`}>
                                                 {peca.estoque_atual > 10 ? '✅ Em Estoque' : peca.estoque_atual > 0 ? '⚠️ Estoque Baixo' : '❌ Sem Estoque'}
                                             </div>

@@ -291,3 +291,6 @@ class PedidoCompraSerializer(serializers.ModelSerializer):
             'observacao'
         ]
         read_only_fields = ['valor_total', 'data_pedido', 'data_aprovacao', 'fornecedor']
+        extra_kwargs = {
+            'valor_unitario': {'required': False}  # <--- ADICIONAR ISSO
+        }

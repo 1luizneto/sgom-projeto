@@ -377,11 +377,17 @@ class PedidoCompraViewSet(viewsets.ModelViewSet):
             return PedidoCompra.objects.none()
 
     def perform_create(self, serializer):
-        """Admin cria pedido - preenche automaticamente o fornecedor do produto"""
+        """Admin cria pedido - preenche automaticamente o fornecedor e valor_unitario do produto"""
         produto = serializer.validated_data['produto']
+        
+        # Buscar o custo do produto como valor unitário
+        valor_unitario = serializer.validated_data.get('valor_unitario')
+        if not valor_unitario:
+            valor_unitario = produto.custo
+        
         serializer.save(
             fornecedor=produto.fornecedor,
-            valor_unitario=produto.custo  # Usa o custo do produto
+            valor_unitario=valor_unitario
         )
 
     @action(detail=True, methods=['post'])

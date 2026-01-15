@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico, Notificacao, MovimentacaoEstoque
+from .models import Orcamento, ItemMovimentacao, Produto, OrdemServico, Venda, ItemVenda, Checklist, LaudoTecnico, Notificacao, MovimentacaoEstoque, PedidoCompra
 from veiculos.models import Servico
 from usuarios.models import Fornecedor
 
@@ -277,3 +277,17 @@ class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
                 )
         
         return data
+    
+class PedidoCompraSerializer(serializers.ModelSerializer):
+    produto_nome = serializers.ReadOnlyField(source='produto.nome')
+    fornecedor_nome = serializers.ReadOnlyField(source='fornecedor.nome')
+    
+    class Meta:
+        model = PedidoCompra
+        fields = [
+            'id_pedido', 'produto', 'produto_nome', 'fornecedor', 
+            'fornecedor_nome', 'quantidade', 'valor_unitario', 
+            'valor_total', 'status', 'data_pedido', 'data_aprovacao', 
+            'observacao'
+        ]
+        read_only_fields = ['valor_total', 'data_pedido', 'data_aprovacao', 'fornecedor']

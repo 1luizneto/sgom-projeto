@@ -660,7 +660,7 @@ function DashboardMecanico() {
 
         // Criar o laudo primeiro
         try {
-          const mecanicoId = mecanicos.find(m => 
+          const mecanicoId = mecanicos.find(m =>
             m.nome === localStorage.getItem('user_name')
           )?.id_mecanico;
 
@@ -684,10 +684,10 @@ function DashboardMecanico() {
     // Atualizar status da OS
     try {
       const payload = { status: novoStatusOS };
-      
+
       if (novoStatusOS === 'CONCLUIDA') {
         payload.data_conclusao = new Date().toISOString();
-        
+
         // Atualizar também o agendamento
         const orcamento = orcamentos.find(orc => orc.id_orcamento === osAtual.orcamento);
         if (orcamento?.agendamento) {
@@ -698,9 +698,9 @@ function DashboardMecanico() {
       }
 
       await api.patch(`ordens-servico/${osAtual.id_os}/`, payload);
-      
+
       alert('✅ Status da OS atualizado com sucesso!');
-      
+
       // Resetar estados
       setMostrarModalOS(false);
       setMostrandoCamposLaudo(false);
@@ -709,7 +709,7 @@ function DashboardMecanico() {
         acoes_corretivas: '',
         recomendacoes_futuras: ''
       });
-      
+
       carregarDadosIniciais();
     } catch (err) {
       console.error('Erro ao atualizar OS:', err);
@@ -1448,26 +1448,159 @@ function DashboardMecanico() {
         </div>
       )}
 
-      {/* MODAL VEÍCULO (Mantido igual) */}
+      {/* MODAL CADASTRAR VEÍCULO - AJUSTADO */}
       {mostrarModalVeiculo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg relative animate-fade-in">
-            <button onClick={() => setMostrarModalVeiculo(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">✕</button>
-            <h2 className="text-xl font-bold mb-4 text-indigo-700">Cadastrar Novo Veículo</h2>
-            <form onSubmit={handleCadastraVeiculo} className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="lbl">Proprietário</label>
-                <select className="input-padrao" value={novoVeiculo.cliente} onChange={e => setNovoVeiculo({ ...novoVeiculo, cliente: e.target.value })} required>
-                  <option value="">Selecione...</option>
-                  {clientes.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>)}
-                </select>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
+              <h2 className="text-xl font-bold">🚗 Cadastrar Novo Veículo</h2>
+              <button
+                onClick={() => setMostrarModalVeiculo(false)}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCadastraVeiculo} className="p-6">
+              <div className="space-y-4">
+                {/* PROPRIETÁRIO */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Proprietário *
+                  </label>
+                  <select
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    value={novoVeiculo.cliente}
+                    onChange={e => setNovoVeiculo({ ...novoVeiculo, cliente: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecione o proprietário...</option>
+                    {clientes.map(c => (
+                      <option key={c.id_cliente} value={c.id_cliente}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* PLACA E MARCA */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Placa *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
+                      placeholder="ABC-1234"
+                      value={novoVeiculo.placa}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, placa: e.target.value.toUpperCase() })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Marca *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Fiat"
+                      value={novoVeiculo.marca}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, marca: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* MODELO */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Modelo *
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Uno Mille"
+                    value={novoVeiculo.modelo}
+                    onChange={e => setNovoVeiculo({ ...novoVeiculo, modelo: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* COR E ANO */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Cor *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Branco"
+                      value={novoVeiculo.cor}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, cor: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Ano *
+                    </label>
+                    <input
+                      type="number"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="2010"
+                      min="1900"
+                      max={new Date().getFullYear() + 1}
+                      value={novoVeiculo.ano}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, ano: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* TIPO DE COMBUSTÍVEL */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Tipo de Combustível *
+                  </label>
+                  <select
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    value={novoVeiculo.tipo_combustivel}
+                    onChange={e => setNovoVeiculo({ ...novoVeiculo, tipo_combustivel: e.target.value })}
+                    required
+                  >
+                    <option value="FLEX">Flex (Gasolina/Etanol)</option>
+                    <option value="GASOLINA">Gasolina</option>
+                    <option value="ETANOL">Etanol</option>
+                    <option value="DIESEL">Diesel</option>
+                    <option value="GNV">GNV</option>
+                    <option value="ELETRICO">Elétrico</option>
+                    <option value="HIBRIDO">Híbrido</option>
+                  </select>
+                </div>
               </div>
-              <div><label className="lbl">Placa</label><input className="input-padrao uppercase" placeholder="ABC-1234" value={novoVeiculo.placa} onChange={e => setNovoVeiculo({ ...novoVeiculo, placa: e.target.value.toUpperCase() })} required /></div>
-              <div><label className="lbl">Marca</label><input className="input-padrao" placeholder="Fiat" value={novoVeiculo.marca} onChange={e => setNovoVeiculo({ ...novoVeiculo, marca: e.target.value })} required /></div>
-              <div className="col-span-2"><label className="lbl">Modelo</label><input className="input-padrao" placeholder="Uno Mille" value={novoVeiculo.modelo} onChange={e => setNovoVeiculo({ ...novoVeiculo, modelo: e.target.value })} required /></div>
-              <div><label className="lbl">Cor</label><input className="input-padrao" placeholder="Branco" value={novoVeiculo.cor} onChange={e => setNovoVeiculo({ ...novoVeiculo, cor: e.target.value })} required /></div>
-              <div><label className="lbl">Ano</label><input className="input-padrao" type="number" placeholder="2010" value={novoVeiculo.ano} onChange={e => setNovoVeiculo({ ...novoVeiculo, ano: e.target.value })} required /></div>
-              <button type="submit" className="col-span-2 bg-indigo-600 text-white font-bold py-3 rounded hover:bg-indigo-700 mt-2">Salvar Veículo</button>
+
+              {/* BOTÕES */}
+              <div className="flex gap-3 mt-6 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalVeiculo(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 shadow-md transition-colors"
+                >
+                  ✅ Salvar Veículo
+                </button>
+              </div>
             </form>
           </div>
         </div>

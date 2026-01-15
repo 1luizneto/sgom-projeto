@@ -16,6 +16,7 @@ function DashboardMecanico() {
   const [ordensServico, setOrdensServico] = useState([]);
   const [checklists, setChecklists] = useState([]); // <--- ADICIONAR NOVO ESTADO
   const [orcamentos, setOrcamentos] = useState([]); // ADICIONAR NOVO ESTADO para armazenar orçamentos
+  const [laudos, setLaudos] = useState([]);
 
   // --- CONTROLE DOS MODAIS ---
   const [mostrarModalVeiculo, setMostrarModalVeiculo] = useState(false);
@@ -104,59 +105,59 @@ function DashboardMecanico() {
 
   // --- CARREGAR DADOS ---
   const carregarDadosIniciais = async () => {
-      try {
-        // 1. Primeiro, identificar qual mecânico está logado
-        const userName = localStorage.getItem('user_name');
-        const userId = localStorage.getItem('user_id');
-        
-        // 2. Buscar todos os mecânicos para encontrar o ID do logado
-        const mecanicosResp = await api.get('mecanicos/');
-        const mecanicoLogado = mecanicosResp.data.find(m => 
-          m.nome === userName || m.user === parseInt(userId)
-        );
+    try {
+      const userName = localStorage.getItem('user_name');
+      const userId = localStorage.getItem('user_id');
 
-        console.log('👤 Mecânico logado:', mecanicoLogado);
+      const mecanicosResp = await api.get('mecanicos/');
+      const mecanicoLogado = mecanicosResp.data.find(m =>
+        m.nome === userName || m.user === parseInt(userId)
+      );
 
-        if (!mecanicoLogado) {
-          alert('❌ Erro: Perfil de mecânico não encontrado!');
-          navigate('/');
-          return;
-        }
+      console.log('👤 Mecânico logado:', mecanicoLogado);
 
-        // 3. Carregar APENAS os agendamentos deste mecânico
-        const resp = await Promise.all([
-          api.get(`agendamentos/?mecanico=${mecanicoLogado.id_mecanico}`), // <--- FILTRO AQUI
-          api.get('servicos/'),
-          api.get('clientes/'),
-          api.get('produtos/'),
-          api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] })),
-          api.get('ordens-servico/').catch(err => {
-            console.error('❌ Erro ao carregar OS:', err);
-            return { data: [] };
-          }),
-          api.get('checklists/').catch(() => ({ data: [] })),
-          api.get('orcamentos/').catch(() => ({ data: [] }))
-        ]);
-
-        console.log('📦 DADOS CARREGADOS:');
-        console.log('Agendamentos do mecânico:', resp[0].data);
-        console.log('Ordens de Serviço:', resp[5].data);
-        console.log('Orçamentos:', resp[7].data);
-        console.log('Checklists:', resp[6].data);
-
-        setAgendamentos(resp[0].data);
-        setServicos(resp[1].data);
-        setClientes(resp[2].data);
-        setMecanicos(mecanicosResp.data);
-        setProdutos(resp[3].data || []);
-        setNotificacoes(resp[4].data || []);
-        setOrdensServico(resp[5].data || []);
-        setChecklists(resp[6].data || []);
-        setOrcamentos(resp[7].data || []);
-      } catch (err) {
-        console.error('❌ Erro ao carregar dados:', err);
-        if (err.response?.status === 401) navigate('/');
+      if (!mecanicoLogado) {
+        alert('❌ Erro: Perfil de mecânico não encontrado!');
+        navigate('/');
+        return;
       }
+
+      const resp = await Promise.all([
+        api.get(`agendamentos/?mecanico=${mecanicoLogado.id_mecanico}`),
+        api.get('servicos/'),
+        api.get('clientes/'),
+        api.get('produtos/'),
+        api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] })),
+        api.get('ordens-servico/').catch(err => {
+          console.error('❌ Erro ao carregar OS:', err);
+          return { data: [] };
+        }),
+        api.get('checklists/').catch(() => ({ data: [] })),
+        api.get('orcamentos/').catch(() => ({ data: [] })),
+        api.get('laudos-tecnicos/').catch(() => ({ data: [] }))  // <--- ADICIONAR
+      ]);
+
+      console.log('📦 DADOS CARREGADOS:');
+      console.log('Agendamentos do mecânico:', resp[0].data);
+      console.log('Ordens de Serviço:', resp[5].data);
+      console.log('Orçamentos:', resp[7].data);
+      console.log('Checklists:', resp[6].data);
+      console.log('Laudos:', resp[8].data);
+
+      setAgendamentos(resp[0].data);
+      setServicos(resp[1].data);
+      setClientes(resp[2].data);
+      setMecanicos(mecanicosResp.data);
+      setProdutos(resp[3].data || []);
+      setNotificacoes(resp[4].data || []);
+      setOrdensServico(resp[5].data || []);
+      setChecklists(resp[6].data || []);
+      setOrcamentos(resp[7].data || []);
+      setLaudos(resp[8].data || []);  // <--- ADICIONAR
+    } catch (err) {
+      console.error('❌ Erro ao carregar dados:', err);
+      if (err.response?.status === 401) navigate('/');
+    }
   };
 
   const carregarVeiculos = async (clienteId) => {
@@ -537,8 +538,24 @@ function DashboardMecanico() {
 
   const handleLogout = () => { localStorage.removeItem('token'); navigate('/'); };
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const agendamentosHoje = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje);
-  const agendamentosFuturos = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') !== hoje);
+
+  // CORRIGIR OS FILTROS:
+  const agendamentosHoje = agendamentos.filter(ag =>
+    new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje &&
+    ag.status !== 'CONCLUIDO' &&
+    ag.status !== 'CANCELADO'
+  );
+
+  const agendamentosFuturos = agendamentos.filter(ag => {
+    const dataAgendamento = new Date(ag.horario_inicio).toLocaleDateString('pt-BR');
+    return dataAgendamento !== hoje &&
+      ag.status !== 'CONCLUIDO' &&
+      ag.status !== 'CANCELADO';
+  });
+
+  const agendamentosConcluidos = agendamentos.filter(ag =>
+    ag.status === 'CONCLUIDO'
+  );
 
   // NOVAS FUNÇÕES
   const agendamentoTemChecklist = (idAgendamento) => {
@@ -562,11 +579,24 @@ function DashboardMecanico() {
     abrirModalOrcamentoAposChecklist();
   };
 
+  const osTemLaudo = (osId) => {
+
+    return laudos.some(laudo => laudo.os === osId);
+
+  };
+
+
   // NOVAS FUNÇÕES: ORDEM DE SERVIÇO
   const [osAtual, setOsAtual] = useState(null);
   const [novoStatusOS, setNovoStatusOS] = useState('');
   const [observacoesOS, setObservacoesOS] = useState('');
   const [mostrarConfirmacaoConclusao, setMostrarConfirmacaoConclusao] = useState(false);
+  const [mostrandoCamposLaudo, setMostrandoCamposLaudo] = useState(false);
+  const [dadosLaudo, setDadosLaudo] = useState({
+    diagnostico_detalhado: '',
+    acoes_corretivas: '',
+    recomendacoes_futuras: ''
+  });
 
   // MODIFICAR a função iniciarServico para apenas abrir a OS existente
   const iniciarServico = async (agendamento, orcamento) => {
@@ -608,26 +638,82 @@ function DashboardMecanico() {
 
     if (!osAtual) return;
 
-    // Se o status for CONCLUIDO, mostrar confirmação
+    // SE ESTÁ TENTANDO CONCLUIR, VERIFICAR SE TEM LAUDO
     if (novoStatusOS === 'CONCLUIDA') {
-      setMostrarConfirmacaoConclusao(true);
-      return;
+      if (!osTemLaudo(osAtual.id_os)) {
+        // Se não tem laudo, mostrar campos para preencher
+        if (!mostrandoCamposLaudo) {
+          setMostrandoCamposLaudo(true);
+          return; // Não fecha o modal, apenas mostra os campos
+        }
+
+        // Validar campos do laudo
+        if (!dadosLaudo.diagnostico_detalhado.trim()) {
+          alert('❌ A descrição técnica do defeito é obrigatória para o laudo.');
+          return;
+        }
+
+        if (!dadosLaudo.acoes_corretivas.trim()) {
+          alert('❌ As ações corretivas executadas são obrigatórias.');
+          return;
+        }
+
+        // Criar o laudo primeiro
+        try {
+          const mecanicoId = mecanicos.find(m =>
+            m.nome === localStorage.getItem('user_name')
+          )?.id_mecanico;
+
+          await api.post('laudos-tecnicos/', {
+            os: osAtual.id_os,
+            diagnostico_detalhado: dadosLaudo.diagnostico_detalhado,
+            acoes_corretivas: dadosLaudo.acoes_corretivas,
+            recomendacoes_futuras: dadosLaudo.recomendacoes_futuras,
+            mecanico: mecanicoId
+          });
+
+          console.log('✅ Laudo criado com sucesso!');
+        } catch (err) {
+          console.error('Erro ao criar laudo:', err);
+          alert(`Erro ao criar laudo: ${err.response?.data ? JSON.stringify(err.response.data) : err.message}`);
+          return;
+        }
+      }
     }
 
+    // Atualizar status da OS
     try {
-      const payload = {
-        status: novoStatusOS
-      };
+      const payload = { status: novoStatusOS };
+
+      if (novoStatusOS === 'CONCLUIDA') {
+        payload.data_conclusao = new Date().toISOString();
+
+        // Atualizar também o agendamento
+        const orcamento = orcamentos.find(orc => orc.id_orcamento === osAtual.orcamento);
+        if (orcamento?.agendamento) {
+          await api.patch(`agendamentos/${orcamento.agendamento}/`, {
+            status: 'CONCLUIDO'
+          });
+        }
+      }
 
       await api.patch(`ordens-servico/${osAtual.id_os}/`, payload);
 
-      alert('✅ Status atualizado com sucesso!');
+      alert('✅ Status da OS atualizado com sucesso!');
 
+      // Resetar estados
       setMostrarModalOS(false);
+      setMostrandoCamposLaudo(false);
+      setDadosLaudo({
+        diagnostico_detalhado: '',
+        acoes_corretivas: '',
+        recomendacoes_futuras: ''
+      });
+
       carregarDadosIniciais();
     } catch (err) {
-      console.error(err);
-      alert('Erro ao atualizar status: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message));
+      console.error('Erro ao atualizar OS:', err);
+      alert('Erro ao atualizar status da OS.');
     }
   };
 
@@ -693,7 +779,7 @@ function DashboardMecanico() {
   };
 
   // FILTRAR AGENDAMENTOS CONCLUÍDOS
-  const agendamentosConcluidos = agendamentos.filter(ag => ag.status === 'CONCLUIDO');
+  //const agendamentosConcluidos = agendamentos.filter(ag => ag.status === 'CONCLUIDO');
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
@@ -1017,7 +1103,7 @@ function DashboardMecanico() {
                     <input
                       type="number"
                       min="1"
-                      className="w-full p-3 border rounded-lg mt-1"
+                      className="w-full p-3 border rounded mt-1"
                       value={quantidadeVenda}
                       onChange={e => setQuantidadeVenda(parseInt(e.target.value) || 1)}
                     />
@@ -1362,26 +1448,159 @@ function DashboardMecanico() {
         </div>
       )}
 
-      {/* MODAL VEÍCULO (Mantido igual) */}
+      {/* MODAL CADASTRAR VEÍCULO - AJUSTADO */}
       {mostrarModalVeiculo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg relative animate-fade-in">
-            <button onClick={() => setMostrarModalVeiculo(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">✕</button>
-            <h2 className="text-xl font-bold mb-4 text-indigo-700">Cadastrar Novo Veículo</h2>
-            <form onSubmit={handleCadastraVeiculo} className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="lbl">Proprietário</label>
-                <select className="input-padrao" value={novoVeiculo.cliente} onChange={e => setNovoVeiculo({ ...novoVeiculo, cliente: e.target.value })} required>
-                  <option value="">Selecione...</option>
-                  {clientes.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nome}</option>)}
-                </select>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
+              <h2 className="text-xl font-bold">🚗 Cadastrar Novo Veículo</h2>
+              <button
+                onClick={() => setMostrarModalVeiculo(false)}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCadastraVeiculo} className="p-6">
+              <div className="space-y-4">
+                {/* PROPRIETÁRIO */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Proprietário *
+                  </label>
+                  <select
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    value={novoVeiculo.cliente}
+                    onChange={e => setNovoVeiculo({ ...novoVeiculo, cliente: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecione o proprietário...</option>
+                    {clientes.map(c => (
+                      <option key={c.id_cliente} value={c.id_cliente}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* PLACA E MARCA */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Placa *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
+                      placeholder="ABC-1234"
+                      value={novoVeiculo.placa}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, placa: e.target.value.toUpperCase() })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Marca *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Fiat"
+                      value={novoVeiculo.marca}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, marca: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* MODELO */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Modelo *
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Uno Mille"
+                    value={novoVeiculo.modelo}
+                    onChange={e => setNovoVeiculo({ ...novoVeiculo, modelo: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* COR E ANO */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Cor *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Branco"
+                      value={novoVeiculo.cor}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, cor: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Ano *
+                    </label>
+                    <input
+                      type="number"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="2010"
+                      min="1900"
+                      max={new Date().getFullYear() + 1}
+                      value={novoVeiculo.ano}
+                      onChange={e => setNovoVeiculo({ ...novoVeiculo, ano: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* TIPO DE COMBUSTÍVEL */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Tipo de Combustível *
+                  </label>
+                  <select
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    value={novoVeiculo.tipo_combustivel}
+                    onChange={e => setNovoVeiculo({ ...novoVeiculo, tipo_combustivel: e.target.value })}
+                    required
+                  >
+                    <option value="FLEX">Flex (Gasolina/Etanol)</option>
+                    <option value="GASOLINA">Gasolina</option>
+                    <option value="ETANOL">Etanol</option>
+                    <option value="DIESEL">Diesel</option>
+                    <option value="GNV">GNV</option>
+                    <option value="ELETRICO">Elétrico</option>
+                    <option value="HIBRIDO">Híbrido</option>
+                  </select>
+                </div>
               </div>
-              <div><label className="lbl">Placa</label><input className="input-padrao uppercase" placeholder="ABC-1234" value={novoVeiculo.placa} onChange={e => setNovoVeiculo({ ...novoVeiculo, placa: e.target.value.toUpperCase() })} required /></div>
-              <div><label className="lbl">Marca</label><input className="input-padrao" placeholder="Fiat" value={novoVeiculo.marca} onChange={e => setNovoVeiculo({ ...novoVeiculo, marca: e.target.value })} required /></div>
-              <div className="col-span-2"><label className="lbl">Modelo</label><input className="input-padrao" placeholder="Uno Mille" value={novoVeiculo.modelo} onChange={e => setNovoVeiculo({ ...novoVeiculo, modelo: e.target.value })} required /></div>
-              <div><label className="lbl">Cor</label><input className="input-padrao" placeholder="Branco" value={novoVeiculo.cor} onChange={e => setNovoVeiculo({ ...novoVeiculo, cor: e.target.value })} required /></div>
-              <div><label className="lbl">Ano</label><input className="input-padrao" type="number" placeholder="2010" value={novoVeiculo.ano} onChange={e => setNovoVeiculo({ ...novoVeiculo, ano: e.target.value })} required /></div>
-              <button type="submit" className="col-span-2 bg-indigo-600 text-white font-bold py-3 rounded hover:bg-indigo-700 mt-2">Salvar Veículo</button>
+
+              {/* BOTÕES */}
+              <div className="flex gap-3 mt-6 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setMostrarModalVeiculo(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 shadow-md transition-colors"
+                >
+                  ✅ Salvar Veículo
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1545,112 +1764,206 @@ function DashboardMecanico() {
       {/* MODAL ATUALIZAR STATUS DA OS */}
       {mostrarModalOS && osAtual && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl relative">
-            <button onClick={() => setMostrarModalOS(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex justify-between items-center rounded-t-xl">
+              <h2 className="text-xl font-bold">🔧 Ordem de Serviço #{osAtual.numero_os}</h2>
+              <button
+                onClick={() => {
+                  setMostrarModalOS(false);
+                  setMostrandoCamposLaudo(false);
+                  setDadosLaudo({
+                    diagnostico_detalhado: '',
+                    acoes_corretivas: '',
+                    recomendacoes_futuras: ''
+                  });
+                }}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
 
-            <h2 className="text-2xl font-bold mb-6 text-blue-700">🔧 Ordem de Serviço #{osAtual.id_os}</h2>
-
-            <form onSubmit={atualizarStatusOS} className="flex flex-col gap-6">
+            <form onSubmit={atualizarStatusOS} className="p-6">
               {/* INFORMAÇÕES DA OS */}
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h3 className="font-bold text-blue-800 mb-3">Informações do Serviço</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
+                <h3 className="font-bold text-blue-800 mb-3">📋 Informações da OS</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-600">Status Atual</p>
-                    <p className="font-bold text-gray-800">
-                      {osAtual.status === 'AGUARDANDO_INICIO' ? '⏸️ Aguardando Início' : osAtual.status}
-                    </p>
+                    <p className="text-gray-600">Veículo</p>
+                    <p className="font-bold">{osAtual.veiculo_modelo} - {osAtual.veiculo_placa}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600">Data de Criação</p>
-                    <p className="font-bold text-gray-800">{new Date(osAtual.data_inicio).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-gray-600">Status Atual</p>
+                    <p className="font-bold text-blue-600">{osAtual.status}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Data Abertura</p>
+                    <p className="font-bold">{new Date(osAtual.data_abertura).toLocaleString('pt-BR')}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Mecânico</p>
+                    <p className="font-bold">{osAtual.mecanico_nome}</p>
                   </div>
                 </div>
               </div>
 
               {/* ATUALIZAR STATUS */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Atualizar Status *
-                </label>
-                <select
-                  className="w-full p-3 border rounded-lg"
-                  value={novoStatusOS}
-                  onChange={e => setNovoStatusOS(e.target.value)}
-                  required
-                >
-                  <option value="AGUARDANDO_INICIO">⏸️ Aguardando Início</option>
-                  <option value="EM_ANDAMENTO">🔄 Em Andamento</option>
-                  <option value="AGUARDANDO_PECAS">⏳ Aguardando Peça</option>
-                  <option value="CONCLUIDA">✅ Concluído</option>
-                  <option value="CANCELADA">❌ Cancelado</option>
-                </select>
-              </div>
+              {!mostrandoCamposLaudo && (
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Atualizar Status da OS
+                  </label>
+                  <select
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    value={novoStatusOS}
+                    onChange={(e) => setNovoStatusOS(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="AGUARDANDO_INICIO">⏳ Aguardando Início</option>
+                    <option value="EM_ANDAMENTO">🔧 Em Andamento</option>
+                    <option value="AGUARDANDO_PECAS">⏸️ Aguardando Peças</option>
+                    <option value="CONCLUIDA">✅ Concluída</option>
+                    <option value="CANCELADA">❌ Cancelada</option>
+                  </select>
+                </div>
+              )}
 
-              {/* OBSERVAÇÕES */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  Observações sobre a Atualização
-                </label>
-                <textarea
-                  className="w-full p-3 border rounded-lg h-24"
-                  placeholder="Ex: Iniciando diagnóstico do motor..."
-                  value={observacoesOS}
-                  onChange={e => setObservacoesOS(e.target.value)}
-                />
-              </div>
+              {/* CAMPOS DO LAUDO (APARECEM QUANDO TENTA CONCLUIR) */}
+              {mostrandoCamposLaudo && novoStatusOS === 'CONCLUIDA' && !osTemLaudo(osAtual.id_os) && (
+                <div className="space-y-6 border-t pt-6">
+                  <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
+                    <p className="font-bold text-yellow-800 flex items-center gap-2">
+                      📋 Laudo Técnico Obrigatório
+                    </p>
+                    <p className="text-sm text-yellow-700 mt-2">
+                      Para concluir esta OS, você precisa preencher o Laudo Técnico com o diagnóstico e as ações realizadas.
+                    </p>
+                  </div>
+
+                  {/* 1. DIAGNÓSTICO INICIAL */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      1. Diagnóstico Inicial / Descrição do Defeito *
+                    </label>
+                    <textarea
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-32"
+                      placeholder="Descreva detalhadamente o defeito identificado no veículo..."
+                      value={dadosLaudo.diagnostico_detalhado}
+                      onChange={e => setDadosLaudo({ ...dadosLaudo, diagnostico_detalhado: e.target.value })}
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ex: "Desvio no eixo dianteiro esquerdo de 2 graus, causando desgaste irregular dos pneus."
+                    </p>
+                  </div>
+
+                  {/* 2. AÇÕES CORRETIVAS */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      2. Ações Corretivas Executadas *
+                    </label>
+                    <textarea
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-32"
+                      placeholder="Descreva todas as ações realizadas para corrigir o problema..."
+                      value={dadosLaudo.acoes_corretivas}
+                      onChange={e => setDadosLaudo({ ...dadosLaudo, acoes_corretivas: e.target.value })}
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ex: "Substituição do Terminal de Direção e Pivô. Realizado alinhamento e balanceamento."
+                    </p>
+                  </div>
+
+                  {/* 3. RECOMENDAÇÕES FUTURAS */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      3. Recomendações Futuras (Opcional)
+                    </label>
+                    <textarea
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-24"
+                      placeholder="Sugestões de manutenção preventiva..."
+                      value={dadosLaudo.recomendacoes_futuras}
+                      onChange={e => setDadosLaudo({ ...dadosLaudo, recomendacoes_futuras: e.target.value })}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ex: "Verificar novamente o alinhamento após 5.000 km rodados."
+                    </p>
+                  </div>
+
+                  {/* INFORMAÇÕES AUTOMÁTICAS */}
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h4 className="font-bold text-gray-700 mb-3">📌 Informações Automáticas</h4>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-gray-600">Mecânico Responsável</p>
+                        <p className="font-bold">{localStorage.getItem('user_name')}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Data/Hora</p>
+                        <p className="font-bold">{new Date().toLocaleString('pt-BR')}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      ℹ️ Estas informações serão registradas automaticamente no laudo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* AVISO SE JÁ TEM LAUDO */}
+              {osTemLaudo(osAtual.id_os) && novoStatusOS === 'CONCLUIDA' && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600 text-xl">✅</span>
+                    <p className="text-sm text-green-700 font-bold">
+                      Laudo Técnico já registrado para esta OS
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* BOTÕES */}
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-4 border-t">
+                {mostrandoCamposLaudo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMostrandoCamposLaudo(false);
+                      setDadosLaudo({
+                        diagnostico_detalhado: '',
+                        acoes_corretivas: '',
+                        recomendacoes_futuras: ''
+                      });
+                    }}
+                    className="bg-gray-200 text-gray-700 font-bold px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    ← Voltar
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setMostrarModalOS(false)}
-                  className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300"
+                  onClick={() => {
+                    setMostrarModalOS(false);
+                    setMostrandoCamposLaudo(false);
+                    setDadosLaudo({
+                      diagnostico_detalhado: '',
+                      acoes_corretivas: '',
+                      recomendacoes_futuras: ''
+                    });
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700"
+                  className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 shadow-md transition-colors flex items-center justify-center gap-2"
                 >
-                  {novoStatusOS === 'CONCLUIDA' ? '✅ Finalizar Serviço' : '🔄 Atualizar Status'}
+                  {mostrandoCamposLaudo ? '✅ Salvar Laudo e Concluir OS' : '✓ Atualizar Status'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CONFIRMAÇÃO DE CONCLUSÃO */}
-      {mostrarConfirmacaoConclusao && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4 text-green-700">🎉 Confirmar Conclusão do Serviço</h2>
-
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-              <p className="text-sm text-yellow-800">
-                <strong>Atenção:</strong> Ao confirmar, o serviço será marcado como <strong>CONCLUIDO</strong> e o agendamento será finalizado.
-              </p>
-            </div>
-
-            <p className="text-gray-700 mb-6">
-              Tem certeza que deseja finalizar este serviço?
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setMostrarConfirmacaoConclusao(false)}
-                className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmarConclusao}
-                className="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700"
-              >
-                ✅ Sim, Finalizar
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1735,8 +2048,8 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
             <span className="text-xs text-gray-400 ml-2 block">{diaMes}</span>
           </div>
           <span className={`text-xs px-2 py-1 rounded font-bold ${estaConcluido
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-600'
+            ? 'bg-green-100 text-green-700'
+            : 'bg-gray-100 text-gray-600'
             }`}>
             {estaConcluido ? '✅ CONCLUÍDO' : agendamento.status}
           </span>
@@ -1763,10 +2076,10 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
             {/* Orçamento */}
             {orcamento && (
               <div className={`border rounded p-2 flex items-center gap-2 ${orcamento.status === 'PENDENTE'
-                  ? 'bg-yellow-50 border-yellow-200'
-                  : orcamento.status === 'APROVADO'
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-red-50 border-red-200'
+                ? 'bg-yellow-50 border-yellow-200'
+                : orcamento.status === 'APROVADO'
+                  ? 'bg-green-50 border-green-200'
+                  : 'bg-red-50 border-red-200'
                 }`}>
                 <span className={
                   orcamento.status === 'PENDENTE'
@@ -1779,10 +2092,10 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
                 </span>
                 <div className="flex-1">
                   <p className={`text-xs font-bold ${orcamento.status === 'PENDENTE'
-                      ? 'text-yellow-700'
-                      : orcamento.status === 'APROVADO'
-                        ? 'text-green-700'
-                        : 'text-red-700'
+                    ? 'text-yellow-700'
+                    : orcamento.status === 'APROVADO'
+                      ? 'text-green-700'
+                      : 'text-red-700'
                     }`}>
                     {orcamento.status === 'PENDENTE'
                       ? `Orçamento #${orcamento.id_orcamento} - Aguardando Cliente`

@@ -222,3 +222,38 @@ class MovimentacaoEstoque(models.Model):
         ordering = ['-data_movimentacao']
         verbose_name = 'Movimentação de Estoque'
         verbose_name_plural = 'Movimentações de Estoque'
+
+# --- Pedido de Compra ---
+class PedidoCompra(models.Model):
+    """
+    Pedido de compra feito pela Oficina (Admin) ao Fornecedor
+    """
+    STATUS_CHOICES = [
+        ('PENDENTE', 'Pendente'),
+        ('APROVADO', 'Aprovado'),
+        ('REJEITADO', 'Rejeitado'),
+        ('ENTREGUE', 'Entregue'),
+    ]
+
+    id_pedido = models.AutoField(primary_key=True)
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='pedidos_compra')
+    fornecedor = models.ForeignKey('usuarios.Fornecedor', on_delete=models.CASCADE, related_name='pedidos_recebidos')
+    quantidade = models.IntegerField()
+    valor_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    valor_total = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDENTE')
+    data_pedido = models.DateTimeField(auto_now_add=True)
+    data_aprovacao = models.DateTimeField(null=True, blank=True)
+    observacao = models.TextField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        self.valor_total = self.quantidade * self.valor_unitario
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Pedido #{self.id_pedido} - {self.produto.nome} ({self.quantidade}un)"
+
+    class Meta:
+        ordering = ['-data_pedido']
+        verbose_name = 'Pedido de Compra'
+        verbose_name_plural = 'Pedidos de Compra'

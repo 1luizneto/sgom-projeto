@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Produto, Orcamento, OrdemServico, ItemMovimentacao, Venda, ItemVenda, Checklist, LaudoTecnico, MovimentacaoEstoque
+from .models import Produto, Orcamento, OrdemServico, ItemMovimentacao, Venda, ItemVenda, Checklist, LaudoTecnico, MovimentacaoEstoque, PedidoCompra
 
 admin.site.register(Orcamento)
 admin.site.register(OrdemServico)
@@ -21,3 +21,9 @@ class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
     list_filter = ['tipo_movimentacao', 'data_movimentacao', 'produto']
     search_fields = ['produto__nome', 'observacao']
     readonly_fields = ['data_movimentacao']
+
+@admin.register(PedidoCompra)
+class PedidoCompraAdmin(admin.ModelAdmin):
+    list_display = ['id_pedido', 'produto', 'fornecedor', 'quantidade', 'valor_total', 'status', 'data_pedido']
+    list_filter = ['status', 'data_pedido']
+    search_fields = ['produto__nome', 'fornecedor__nome']

@@ -7,6 +7,9 @@ function DashboardFornecedor() {
     const [pecas, setPecas] = useState([]);
     const [abaSelecionada, setAbaSelecionada] = useState('pedidos');
     const [mostrarModalNovaPeca, setMostrarModalNovaPeca] = useState(false);
+    const [mostrarModalEditarPeca, setMostrarModalEditarPeca] = useState(false); // <--- NOVO
+    const [mostrarModalConfirmarExclusao, setMostrarModalConfirmarExclusao] = useState(false); // <--- NOVO
+    const [pecaSelecionada, setPecaSelecionada] = useState(null); // <--- NOVO
     const [novaPeca, setNovaPeca] = useState({
         nome: '',
         descricao: '',
@@ -31,8 +34,8 @@ function DashboardFornecedor() {
 
     const carregarPedidos = async () => {
         try {
-            const response = await api.get('pedidos/');
-            console.log("📦 Pedidos recebidos:", response.data);
+            const response = await api.get('pedidos-compra/');
+            console.log("📦 Pedidos de compra recebidos:", response.data);
             setPedidos(response.data);
         } catch (err) {
             console.error("Erro ao carregar pedidos", err);
@@ -68,7 +71,7 @@ function DashboardFornecedor() {
         try {
             // Pegar o ID do fornecedor logado
             const userId = localStorage.getItem('user_id');
-            
+
             // Buscar o fornecedor associado ao usuário
             let fornecedorId = null;
             try {
@@ -107,11 +110,75 @@ function DashboardFornecedor() {
             carregarPecas();
         } catch (err) {
             console.error("Erro completo:", err.response?.data || err);
-            const erroMsg = err.response?.data 
+            const erroMsg = err.response?.data
                 ? JSON.stringify(err.response.data, null, 2)
                 : 'Erro ao cadastrar produto.';
             alert(`Erro: ${erroMsg}`);
         }
+    };
+
+    // NOVA FUNÇÃO: Abrir modal de edição
+    const abrirModalEdicao = (peca) => {
+        setPecaSelecionada({
+            ...peca,
+            custo: parseFloat(peca.custo || 0),
+            preco_venda: parseFloat(peca.preco_venda || 0),
+            estoque_minimo: parseInt(peca.estoque_minimo || 0),
+            estoque_atual: parseInt(peca.estoque_atual || 0)
+        });
+        setMostrarModalEditarPeca(true);
+    };
+
+    // NOVA FUNÇÃO: Atualizar produto
+    const atualizarPeca = async (e) => {
+        e.preventDefault();
+
+        try {
+            const produtoData = {
+                nome: pecaSelecionada.nome,
+                descricao: pecaSelecionada.descricao || '',
+                custo: parseFloat(pecaSelecionada.custo),
+                preco_venda: parseFloat(pecaSelecionada.preco_venda),
+                estoque_minimo: parseInt(pecaSelecionada.estoque_minimo),
+                estoque_atual: parseInt(pecaSelecionada.estoque_atual),
+                fornecedor: pecaSelecionada.fornecedor
+            };
+
+            await api.put(`produtos/${pecaSelecionada.id_produto}/`, produtoData);
+            alert('✅ Produto atualizado com sucesso!');
+            setMostrarModalEditarPeca(false);
+            setPecaSelecionada(null);
+            carregarPecas();
+        } catch (err) {
+            console.error("Erro ao atualizar:", err.response?.data || err);
+            alert(`Erro: ${JSON.stringify(err.response?.data)}`);
+        }
+    };
+
+    // NOVA FUNÇÃO: Confirmar exclusão (1ª etapa)
+    const iniciarExclusao = () => {
+        setMostrarModalEditarPeca(false);
+        setMostrarModalConfirmarExclusao(true);
+    };
+
+    // NOVA FUNÇÃO: Executar exclusão (2ª etapa)
+    const confirmarExclusao = async () => {
+        try {
+            await api.delete(`produtos/${pecaSelecionada.id_produto}/`);
+            alert('🗑️ Produto excluído com sucesso!');
+            setMostrarModalConfirmarExclusao(false);
+            setPecaSelecionada(null);
+            carregarPecas();
+        } catch (err) {
+            console.error("Erro ao excluir:", err);
+            alert('Erro ao excluir produto.');
+        }
+    };
+
+    // NOVA FUNÇÃO: Cancelar exclusão
+    const cancelarExclusao = () => {
+        setMostrarModalConfirmarExclusao(false);
+        setMostrarModalEditarPeca(true);
     };
 
     const handleLogout = () => {
@@ -155,6 +222,32 @@ function DashboardFornecedor() {
         };
     };
 
+    const aprovarPedido = async (id) => {
+        if (!confirm('Aprovar este pedido? Seu estoque será reduzido.')) return;
+
+        try {
+            await api.post(`pedidos-compra/${id}/aprovar/`);
+            alert('✅ Pedido aprovado! Estoque atualizado.');
+            carregarPedidos();
+            carregarPecas();
+        } catch (err) {
+            alert(`Erro: ${err.response?.data?.erro || 'Erro ao aprovar pedido'}`);
+        }
+    };
+
+    const rejeitarPedido = async (id) => {
+        const motivo = prompt('Motivo da rejeição:');
+        if (!motivo) return;
+
+        try {
+            await api.post(`pedidos-compra/${id}/rejeitar/`, { motivo });
+            alert('❌ Pedido rejeitado.');
+            carregarPedidos();
+        } catch (err) {
+            alert('Erro ao rejeitar pedido.');
+        }
+    };
+
     const pedidosPendentes = pedidos.filter(p => p.status === 'PENDENTE');
     const pedidosEmAndamento = pedidos.filter(p => ['EM_SEPARACAO', 'ENVIADO'].includes(p.status));
     const pedidosFinalizados = pedidos.filter(p => ['ENTREGUE', 'CANCELADO'].includes(p.status));
@@ -189,8 +282,8 @@ function DashboardFornecedor() {
                     <button
                         onClick={() => setAbaSelecionada('pedidos')}
                         className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'pedidos'
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         📦 Pedidos
@@ -202,8 +295,8 @@ function DashboardFornecedor() {
                     <button
                         onClick={() => setAbaSelecionada('catalogo')}
                         className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'catalogo'
-                                ? 'bg-green-600 text-white shadow-md'
-                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            ? 'bg-green-600 text-white shadow-md'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         🔧 Catálogo de Peças
@@ -270,80 +363,38 @@ function DashboardFornecedor() {
                                     const statusConfig = getStatusConfig(pedido.status);
 
                                     return (
-                                        <div key={pedido.id_pedido} className={`bg-white rounded-lg shadow-md border-l-4 overflow-hidden hover:shadow-lg transition-shadow ${statusConfig.cor.replace('bg-', 'border-')}`}>
-                                            {/* Cabeçalho do Pedido */}
-                                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b flex justify-between items-center">
+                                        <div key={pedido.id_pedido} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-600">
+                                            <div className="flex justify-between items-start mb-4">
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                                        📦 Pedido #{pedido.id_pedido}
-                                                    </h3>
-                                                    <p className="text-sm text-gray-600 mt-1">
-                                                        Data: {new Date(pedido.data_pedido).toLocaleDateString('pt-BR')}
-                                                    </p>
+                                                    <h3 className="text-lg font-bold">📦 {pedido.produto_nome}</h3>
+                                                    <p className="text-sm text-gray-600">Quantidade: {pedido.quantidade} un.</p>
+                                                    <p className="text-sm text-gray-600">Valor Total: R$ {parseFloat(pedido.valor_total).toFixed(2)}</p>
+                                                    <p className="text-xs text-gray-500">{new Date(pedido.data_pedido).toLocaleString('pt-BR')}</p>
                                                 </div>
-                                                <div className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${statusConfig.cor}`}>
-                                                    <span className="text-xl">{statusConfig.icone}</span>
-                                                    {statusConfig.titulo}
-                                                </div>
+                                                <span className={`px-3 py-1 rounded-full text-sm font-bold ${pedido.status === 'PENDENTE' ? 'bg-yellow-200 text-yellow-800' :
+                                                    pedido.status === 'APROVADO' ? 'bg-green-200 text-green-800' :
+                                                        'bg-red-200 text-red-800'
+                                                    }`}>
+                                                    {pedido.status}
+                                                </span>
                                             </div>
 
-                                            {/* Conteúdo do Pedido */}
-                                            <div className="p-6">
-                                                <div className="mb-4">
-                                                    <p className="text-sm text-gray-500 mb-2">Itens do Pedido:</p>
-                                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                                        <p className="text-gray-700">{pedido.descricao || 'Descrição não informada'}</p>
-                                                    </div>
+                                            {pedido.status === 'PENDENTE' && (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => aprovarPedido(pedido.id_pedido)}
+                                                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold"
+                                                    >
+                                                        ✅ Aprovar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => rejeitarPedido(pedido.id_pedido)}
+                                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold"
+                                                    >
+                                                        ❌ Rejeitar
+                                                    </button>
                                                 </div>
-
-                                                {pedido.data_entrega && (
-                                                    <div className="bg-blue-50 px-4 py-2 rounded-lg inline-block mb-4">
-                                                        <p className="text-xs text-blue-600 font-bold">Previsão de Entrega</p>
-                                                        <p className="text-sm font-bold text-blue-700">
-                                                            {new Date(pedido.data_entrega).toLocaleDateString('pt-BR')}
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {/* Ações */}
-                                                <div className="flex gap-2 flex-wrap pt-4 border-t">
-                                                    {pedido.status === 'PENDENTE' && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'EM_SEPARACAO')}
-                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
-                                                        >
-                                                            📦 Iniciar Separação
-                                                        </button>
-                                                    )}
-
-                                                    {pedido.status === 'EM_SEPARACAO' && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'ENVIADO')}
-                                                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
-                                                        >
-                                                            🚚 Marcar como Enviado
-                                                        </button>
-                                                    )}
-
-                                                    {pedido.status === 'ENVIADO' && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'ENTREGUE')}
-                                                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors shadow-md flex items-center gap-2"
-                                                        >
-                                                            ✅ Confirmar Entrega
-                                                        </button>
-                                                    )}
-
-                                                    {!['ENTREGUE', 'CANCELADO'].includes(pedido.status) && (
-                                                        <button
-                                                            onClick={() => atualizarStatusPedido(pedido.id_pedido, 'CANCELADO')}
-                                                            className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2"
-                                                        >
-                                                            ❌ Cancelar Pedido
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -372,6 +423,7 @@ function DashboardFornecedor() {
                         </div>
 
                         {pecas.length === 0 ? (
+                            /* ...existing empty state code... */
                             <div className="bg-white p-12 rounded-lg shadow text-center">
                                 <span className="text-6xl mb-4 block">🔧</span>
                                 <p className="text-gray-400 text-lg mb-4">Nenhuma peça cadastrada no catálogo.</p>
@@ -385,10 +437,14 @@ function DashboardFornecedor() {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {pecas.map((peca) => (
-                                    <div key={peca.id_peca} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4 border-blue-600 overflow-hidden">
+                                    <div
+                                        key={peca.id_produto}
+                                        onClick={() => abrirModalEdicao(peca)} // <--- ADICIONAR CLICK
+                                        className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all border-l-4 border-blue-600 overflow-hidden cursor-pointer transform hover:scale-105" // <--- ADICIONAR cursor-pointer e hover
+                                    >
                                         <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-3 border-b">
                                             <h3 className="font-bold text-gray-800 text-lg">{peca.nome}</h3>
-                                            <p className="text-xs text-gray-500">Código: {peca.codigo || peca.id_peca}</p>
+                                            <p className="text-xs text-gray-500">Código: {peca.id_produto}</p>
                                         </div>
 
                                         <div className="p-4">
@@ -550,6 +606,184 @@ function DashboardFornecedor() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* NOVO MODAL: EDITAR PEÇA */}
+            {mostrarModalEditarPeca && pecaSelecionada && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex justify-between items-center sticky top-0">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                ✏️ Editar Peça
+                            </h2>
+                            <button
+                                onClick={() => {
+                                    setMostrarModalEditarPeca(false);
+                                    setPecaSelecionada(null);
+                                }}
+                                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={atualizarPeca} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Nome da Peça *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={pecaSelecionada.nome}
+                                    onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, nome: e.target.value })}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Descrição
+                                </label>
+                                <textarea
+                                    value={pecaSelecionada.descricao}
+                                    onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, descricao: e.target.value })}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    rows="3"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Custo (R$) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={pecaSelecionada.custo}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, custo: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Preço de Venda (R$) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={pecaSelecionada.preco_venda}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, preco_venda: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Estoque Mínimo *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={pecaSelecionada.estoque_minimo}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, estoque_minimo: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Estoque Atual *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={pecaSelecionada.estoque_atual}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, estoque_atual: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-4 border-t">
+                                <button
+                                    type="button"
+                                    onClick={iniciarExclusao}
+                                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition-colors flex items-center gap-2"
+                                >
+                                    🗑️ Excluir
+                                </button>
+                                <div className="flex-1 flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMostrarModalEditarPeca(false);
+                                            setPecaSelecionada(null);
+                                        }}
+                                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-bold transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition-colors"
+                                    >
+                                        ✓ Salvar Alterações
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* NOVO MODAL: CONFIRMAR EXCLUSÃO */}
+            {mostrarModalConfirmarExclusao && pecaSelecionada && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
+                        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-4 rounded-t-lg">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                ⚠️ Confirmar Exclusão
+                            </h2>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                                <p className="text-red-800 font-bold mb-2">Atenção!</p>
+                                <p className="text-red-700 text-sm">
+                                    Esta ação não pode ser desfeita. O produto será permanentemente removido do sistema.
+                                </p>
+                            </div>
+
+                            <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                                <p className="text-sm text-gray-600 mb-2">Produto a ser excluído:</p>
+                                <p className="font-bold text-lg">{pecaSelecionada.nome}</p>
+                                <p className="text-sm text-gray-500">Código: {pecaSelecionada.id_produto}</p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={cancelarExclusao}
+                                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-bold transition-colors"
+                                >
+                                    ← Voltar
+                                </button>
+                                <button
+                                    onClick={confirmarExclusao}
+                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold shadow-md transition-colors"
+                                >
+                                    🗑️ Confirmar Exclusão
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

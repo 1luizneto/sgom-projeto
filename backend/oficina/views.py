@@ -2,17 +2,18 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
-from django.db import models  # <--- ADICIONE ESTA LINHA
+from django.db import models, transaction
+from django.utils import timezone
 from .models import (
     Orcamento, ItemMovimentacao, Venda, ItemVenda, 
     Checklist, LaudoTecnico, Produto, OrdemServico, 
-    Notificacao, MovimentacaoEstoque
+    Notificacao, MovimentacaoEstoque, PedidoCompra
 )
 from .serializers import (
     OrcamentoSerializer, ItemMovimentacaoSerializer, 
     VendaSerializer, ChecklistSerializer, LaudoTecnicoSerializer,
     ProdutoSerializer, OrdemServicoSerializer, NotificacaoSerializer,
-    MovimentacaoEstoqueSerializer
+    MovimentacaoEstoqueSerializer, PedidoCompraSerializer
 )
 from usuarios.models import Fornecedor
 
@@ -352,3 +353,115 @@ class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAdminUser()]
         return [IsAuthenticated()]
+    
+class PedidoCompraViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gerenciar Pedidos de Compra
+    - Admin: cria pedidos e vê todos
+    - Fornecedor: vê apenas seus pedidos e pode aprovar/rejeitar
+    """
+    serializer_class = PedidoCompraSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        
+        # Admin vê todos os pedidos
+        if user.is_staff:
+            return PedidoCompra.objects.all()
+        
+        # Fornecedor vê apenas seus pedidos
+        try:
+            fornecedor = Fornecedor.objects.get(user=user)
+            return PedidoCompra.objects.filter(fornecedor=fornecedor)
+        except Fornecedor.DoesNotExist:
+            return PedidoCompra.objects.none()
+
+    def perform_create(self, serializer):
+        """Admin cria pedido - preenche automaticamente o fornecedor e valor_unitario do produto"""
+        produto = serializer.validated_data['produto']
+        
+        # Buscar o custo do produto como valor unitário
+        valor_unitario = serializer.validated_data.get('valor_unitario')
+        if not valor_unitario:
+            valor_unitario = produto.custo
+        
+        serializer.save(
+            fornecedor=produto.fornecedor,
+            valor_unitario=valor_unitario
+        )
+
+    @action(detail=True, methods=['post'])
+    def aprovar(self, request, pk=None):
+        """
+        Fornecedor aprova o pedido:
+        1. Diminui estoque do fornecedor
+        2. Cria entrada de estoque na oficina
+        """
+        pedido = self.get_object()
+        
+        # Validações
+        if pedido.status != 'PENDENTE':
+            return Response(
+                {'erro': 'Este pedido já foi processado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        produto = pedido.produto
+        
+        # Verifica se fornecedor tem estoque
+        if produto.estoque_atual < pedido.quantidade:
+            return Response(
+                {'erro': f'Estoque insuficiente. Disponível: {produto.estoque_atual}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 1. Diminui estoque do fornecedor
+        produto.estoque_atual -= pedido.quantidade
+        produto.save()
+        
+        # 2. Registra saída no estoque do fornecedor
+        MovimentacaoEstoque.objects.create(
+            produto=produto,
+            tipo_movimentacao='SAIDA',
+            quantidade=pedido.quantidade,
+            observacao=f'Venda para Oficina - Pedido #{pedido.id_pedido}'
+        )
+        
+        # 3. Registra entrada no estoque da oficina (movimentação separada)
+        MovimentacaoEstoque.objects.create(
+            produto=produto,
+            tipo_movimentacao='ENTRADA',
+            quantidade=pedido.quantidade,
+            custo_unitario=pedido.valor_unitario,
+            observacao=f'Compra do Fornecedor {produto.fornecedor.nome} - Pedido #{pedido.id_pedido}'
+        )
+        
+        # 4. Atualiza status do pedido
+        pedido.status = 'APROVADO'
+        pedido.data_aprovacao = timezone.now()
+        pedido.save()
+        
+        return Response({
+            'mensagem': 'Pedido aprovado com sucesso!',
+            'estoque_fornecedor': produto.estoque_atual,
+            'estoque_oficina': produto.estoque_atual  # Após a entrada
+        })
+
+    @action(detail=True, methods=['post'])
+    def rejeitar(self, request, pk=None):
+        """Fornecedor rejeita o pedido"""
+        pedido = self.get_object()
+        
+        if pedido.status != 'PENDENTE':
+            return Response(
+                {'erro': 'Este pedido já foi processado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        motivo = request.data.get('motivo', 'Sem motivo informado')
+        pedido.status = 'REJEITADO'
+        pedido.observacao = f'Rejeitado: {motivo}'
+        pedido.save()
+        
+        return Response({'mensagem': 'Pedido rejeitado'})

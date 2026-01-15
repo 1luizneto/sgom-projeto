@@ -13,6 +13,7 @@ function DashboardAdmin() {
     const [clientes, setClientes] = useState([]);
     const [mecanicos, setMecanicos] = useState([]);
     const [fornecedores, setFornecedores] = useState([]);
+    const [pedidosCompra, setPedidosCompra] = useState([]);
 
     // MODAIS
     const [mostrarModalEntrada, setMostrarModalEntrada] = useState(false);
@@ -20,6 +21,7 @@ function DashboardAdmin() {
     const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
     const [mostrarModalMecanico, setMostrarModalMecanico] = useState(false);
     const [mostrarModalFornecedor, setMostrarModalFornecedor] = useState(false);
+    const [mostrarModalSolicitarCompra, setMostrarModalSolicitarCompra] = useState(false);
 
     const [buscaProduto, setBuscaProduto] = useState('');
 
@@ -64,6 +66,11 @@ function DashboardAdmin() {
         password: ''
     });
 
+    const [novoPedidoCompra, setNovoPedidoCompra] = useState({
+        produto: '',
+        quantidade: 1
+    });
+
     const usuarioNome = localStorage.getItem('user_name') || 'Administrador';
 
     // VERIFICAR TOKEN
@@ -83,13 +90,14 @@ function DashboardAdmin() {
 
     const carregarDados = async () => {
         try {
-            const [prodResp, servResp, movResp, cliResp, mecResp, fornResp] = await Promise.all([
+            const [prodResp, servResp, movResp, cliResp, mecResp, fornResp, pedCompraResp] = await Promise.all([
                 api.get('produtos/'),
                 api.get('servicos/'),
                 api.get('movimentacoes-estoque/'),
                 api.get('clientes/'),
                 api.get('mecanicos/'),
-                api.get('fornecedores/')
+                api.get('fornecedores/'),
+                api.get('pedidos-compra/')  // <--- ADICIONAR
             ]);
 
             setProdutos(prodResp.data);
@@ -98,6 +106,7 @@ function DashboardAdmin() {
             setClientes(cliResp.data);
             setMecanicos(mecResp.data);
             setFornecedores(fornResp.data);
+            setPedidosCompra(pedCompraResp.data);  // <--- ADICIONAR
         } catch (err) {
             console.error('Erro ao carregar dados:', err);
             if (err.response?.status === 401) navigate('/');
@@ -202,6 +211,28 @@ function DashboardAdmin() {
         }
     };
 
+    // SOLICITAR COMPRA
+    const handleSolicitarCompra = async (e) => {
+        e.preventDefault();
+
+        try {
+            const produto = produtos.find(p => p.id_produto === parseInt(novoPedidoCompra.produto));
+
+            await api.post('pedidos-compra/', {
+                produto: parseInt(novoPedidoCompra.produto),
+                quantidade: parseInt(novoPedidoCompra.quantidade)
+            });
+
+            alert(`✅ Pedido enviado para ${produto.fornecedor_nome}!`);
+            setMostrarModalSolicitarCompra(false);
+            setNovoPedidoCompra({ produto: '', quantidade: 1 });
+            carregarDados();
+        } catch (err) {
+            console.error('Erro ao solicitar compra:', err);
+            alert(`Erro: ${JSON.stringify(err.response?.data)}`);
+        }
+    };
+
     const handleLogout = () => {
         localStorage.removeItem('token');
         navigate('/');
@@ -241,8 +272,8 @@ function DashboardAdmin() {
                     <button
                         onClick={() => setAbaSelecionada('estoque')}
                         className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'estoque'
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         📦 Estoque
@@ -250,8 +281,8 @@ function DashboardAdmin() {
                     <button
                         onClick={() => setAbaSelecionada('usuarios')}
                         className={`flex-1 px-6 py-3 rounded-lg font-bold transition-all ${abaSelecionada === 'usuarios'
-                                ? 'bg-green-600 text-white shadow-md'
-                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            ? 'bg-green-600 text-white shadow-md'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         👥 Usuários
@@ -274,6 +305,12 @@ function DashboardAdmin() {
                                 className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition-colors flex items-center gap-2"
                             >
                                 🔧 Cadastrar Serviço
+                            </button>
+                            <button
+                                onClick={() => setMostrarModalSolicitarCompra(true)}
+                                className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition-colors flex items-center gap-2"
+                            >
+                                🛒 Solicitar Compra
                             </button>
                         </div>
 
@@ -350,6 +387,35 @@ function DashboardAdmin() {
                                         </div>
                                     ))
                                 )}
+                            </div>
+                        </section>
+
+                        {/* LISTA DE PEDIDOS DE COMPRA */}
+                        <section className="bg-white rounded-lg shadow-lg p-6 mb-8">
+                            <h2 className="text-2xl font-bold mb-4 text-gray-800">🛒 Pedidos de Compra</h2>
+                            <div className="space-y-3">
+                                {pedidosCompra.map(p => (
+                                    <div key={p.id_pedido} className={`p-4 rounded-lg border-l-4 ${p.status === 'PENDENTE' ? 'border-yellow-500 bg-yellow-50' :
+                                            p.status === 'APROVADO' ? 'border-green-500 bg-green-50' :
+                                                'border-red-500 bg-red-50'
+                                        }`}>
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <p className="font-bold">{p.produto_nome}</p>
+                                                <p className="text-sm text-gray-600">
+                                                    Fornecedor: {p.fornecedor_nome} | Qtd: {p.quantidade} | Total: R$ {parseFloat(p.valor_total).toFixed(2)}
+                                                </p>
+                                                <p className="text-xs text-gray-500">{new Date(p.data_pedido).toLocaleString('pt-BR')}</p>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${p.status === 'PENDENTE' ? 'bg-yellow-200 text-yellow-800' :
+                                                    p.status === 'APROVADO' ? 'bg-green-200 text-green-800' :
+                                                        'bg-red-200 text-red-800'
+                                                }`}>
+                                                {p.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </section>
                     </div>
@@ -863,6 +929,59 @@ function DashboardAdmin() {
                                 <button
                                     type="button"
                                     onClick={() => setMostrarModalFornecedor(false)}
+                                    className="flex-1 bg-gray-300 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-400"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: SOLICITAR COMPRA */}
+            {mostrarModalSolicitarCompra && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+                        <h2 className="text-2xl font-bold mb-4 text-orange-700">🛒 Solicitar Compra</h2>
+
+                        <form onSubmit={handleSolicitarCompra}>
+                            <div className="mb-4">
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Produto</label>
+                                <select
+                                    className="w-full p-3 border rounded-lg"
+                                    value={novoPedidoCompra.produto}
+                                    onChange={e => setNovoPedidoCompra({ ...novoPedidoCompra, produto: e.target.value })}
+                                    required
+                                >
+                                    <option value="">Selecione...</option>
+                                    {produtos.map(p => (
+                                        <option key={p.id_produto} value={p.id_produto}>
+                                            {p.nome} - {p.fornecedor_nome} (Estoque Fornecedor: {p.estoque_atual})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Quantidade</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    className="w-full p-3 border rounded-lg"
+                                    value={novoPedidoCompra.quantidade}
+                                    onChange={e => setNovoPedidoCompra({ ...novoPedidoCompra, quantidade: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button type="submit" className="flex-1 bg-orange-600 text-white font-bold py-3 rounded-lg hover:bg-orange-700">
+                                    ✅ Enviar Pedido
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setMostrarModalSolicitarCompra(false)}
                                     className="flex-1 bg-gray-300 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-400"
                                 >
                                     Cancelar

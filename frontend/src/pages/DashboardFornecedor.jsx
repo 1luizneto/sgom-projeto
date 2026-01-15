@@ -7,6 +7,9 @@ function DashboardFornecedor() {
     const [pecas, setPecas] = useState([]);
     const [abaSelecionada, setAbaSelecionada] = useState('pedidos');
     const [mostrarModalNovaPeca, setMostrarModalNovaPeca] = useState(false);
+    const [mostrarModalEditarPeca, setMostrarModalEditarPeca] = useState(false); // <--- NOVO
+    const [mostrarModalConfirmarExclusao, setMostrarModalConfirmarExclusao] = useState(false); // <--- NOVO
+    const [pecaSelecionada, setPecaSelecionada] = useState(null); // <--- NOVO
     const [novaPeca, setNovaPeca] = useState({
         nome: '',
         descricao: '',
@@ -112,6 +115,70 @@ function DashboardFornecedor() {
                 : 'Erro ao cadastrar produto.';
             alert(`Erro: ${erroMsg}`);
         }
+    };
+
+    // NOVA FUNÇÃO: Abrir modal de edição
+    const abrirModalEdicao = (peca) => {
+        setPecaSelecionada({
+            ...peca,
+            custo: parseFloat(peca.custo || 0),
+            preco_venda: parseFloat(peca.preco_venda || 0),
+            estoque_minimo: parseInt(peca.estoque_minimo || 0),
+            estoque_atual: parseInt(peca.estoque_atual || 0)
+        });
+        setMostrarModalEditarPeca(true);
+    };
+
+    // NOVA FUNÇÃO: Atualizar produto
+    const atualizarPeca = async (e) => {
+        e.preventDefault();
+
+        try {
+            const produtoData = {
+                nome: pecaSelecionada.nome,
+                descricao: pecaSelecionada.descricao || '',
+                custo: parseFloat(pecaSelecionada.custo),
+                preco_venda: parseFloat(pecaSelecionada.preco_venda),
+                estoque_minimo: parseInt(pecaSelecionada.estoque_minimo),
+                estoque_atual: parseInt(pecaSelecionada.estoque_atual),
+                fornecedor: pecaSelecionada.fornecedor
+            };
+
+            await api.put(`produtos/${pecaSelecionada.id_produto}/`, produtoData);
+            alert('✅ Produto atualizado com sucesso!');
+            setMostrarModalEditarPeca(false);
+            setPecaSelecionada(null);
+            carregarPecas();
+        } catch (err) {
+            console.error("Erro ao atualizar:", err.response?.data || err);
+            alert(`Erro: ${JSON.stringify(err.response?.data)}`);
+        }
+    };
+
+    // NOVA FUNÇÃO: Confirmar exclusão (1ª etapa)
+    const iniciarExclusao = () => {
+        setMostrarModalEditarPeca(false);
+        setMostrarModalConfirmarExclusao(true);
+    };
+
+    // NOVA FUNÇÃO: Executar exclusão (2ª etapa)
+    const confirmarExclusao = async () => {
+        try {
+            await api.delete(`produtos/${pecaSelecionada.id_produto}/`);
+            alert('🗑️ Produto excluído com sucesso!');
+            setMostrarModalConfirmarExclusao(false);
+            setPecaSelecionada(null);
+            carregarPecas();
+        } catch (err) {
+            console.error("Erro ao excluir:", err);
+            alert('Erro ao excluir produto.');
+        }
+    };
+
+    // NOVA FUNÇÃO: Cancelar exclusão
+    const cancelarExclusao = () => {
+        setMostrarModalConfirmarExclusao(false);
+        setMostrarModalEditarPeca(true);
     };
 
     const handleLogout = () => {
@@ -305,8 +372,8 @@ function DashboardFornecedor() {
                                                     <p className="text-xs text-gray-500">{new Date(pedido.data_pedido).toLocaleString('pt-BR')}</p>
                                                 </div>
                                                 <span className={`px-3 py-1 rounded-full text-sm font-bold ${pedido.status === 'PENDENTE' ? 'bg-yellow-200 text-yellow-800' :
-                                                        pedido.status === 'APROVADO' ? 'bg-green-200 text-green-800' :
-                                                            'bg-red-200 text-red-800'
+                                                    pedido.status === 'APROVADO' ? 'bg-green-200 text-green-800' :
+                                                        'bg-red-200 text-red-800'
                                                     }`}>
                                                     {pedido.status}
                                                 </span>
@@ -356,6 +423,7 @@ function DashboardFornecedor() {
                         </div>
 
                         {pecas.length === 0 ? (
+                            /* ...existing empty state code... */
                             <div className="bg-white p-12 rounded-lg shadow text-center">
                                 <span className="text-6xl mb-4 block">🔧</span>
                                 <p className="text-gray-400 text-lg mb-4">Nenhuma peça cadastrada no catálogo.</p>
@@ -369,10 +437,14 @@ function DashboardFornecedor() {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {pecas.map((peca) => (
-                                    <div key={peca.id_peca} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4 border-blue-600 overflow-hidden">
+                                    <div
+                                        key={peca.id_produto}
+                                        onClick={() => abrirModalEdicao(peca)} // <--- ADICIONAR CLICK
+                                        className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all border-l-4 border-blue-600 overflow-hidden cursor-pointer transform hover:scale-105" // <--- ADICIONAR cursor-pointer e hover
+                                    >
                                         <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-3 border-b">
                                             <h3 className="font-bold text-gray-800 text-lg">{peca.nome}</h3>
-                                            <p className="text-xs text-gray-500">Código: {peca.codigo || peca.id_peca}</p>
+                                            <p className="text-xs text-gray-500">Código: {peca.id_produto}</p>
                                         </div>
 
                                         <div className="p-4">
@@ -396,10 +468,10 @@ function DashboardFornecedor() {
                                             </div>
 
                                             <div className={`text-xs px-3 py-1 rounded-full text-center font-bold ${peca.estoque_atual > 10
-                                                ? 'bg-green-100 text-green-700'
-                                                : peca.estoque_atual > 0
-                                                    ? 'bg-yellow-100 text-yellow-700'
-                                                    : 'bg-red-100 text-red-700'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : peca.estoque_atual > 0
+                                                        ? 'bg-yellow-100 text-yellow-700'
+                                                        : 'bg-red-100 text-red-700'
                                                 }`}>
                                                 {peca.estoque_atual > 10 ? '✅ Em Estoque' : peca.estoque_atual > 0 ? '⚠️ Estoque Baixo' : '❌ Sem Estoque'}
                                             </div>
@@ -534,6 +606,184 @@ function DashboardFornecedor() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* NOVO MODAL: EDITAR PEÇA */}
+            {mostrarModalEditarPeca && pecaSelecionada && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex justify-between items-center sticky top-0">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                ✏️ Editar Peça
+                            </h2>
+                            <button
+                                onClick={() => {
+                                    setMostrarModalEditarPeca(false);
+                                    setPecaSelecionada(null);
+                                }}
+                                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={atualizarPeca} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Nome da Peça *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={pecaSelecionada.nome}
+                                    onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, nome: e.target.value })}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Descrição
+                                </label>
+                                <textarea
+                                    value={pecaSelecionada.descricao}
+                                    onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, descricao: e.target.value })}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    rows="3"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Custo (R$) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={pecaSelecionada.custo}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, custo: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Preço de Venda (R$) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={pecaSelecionada.preco_venda}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, preco_venda: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Estoque Mínimo *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={pecaSelecionada.estoque_minimo}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, estoque_minimo: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        Estoque Atual *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={pecaSelecionada.estoque_atual}
+                                        onChange={(e) => setPecaSelecionada({ ...pecaSelecionada, estoque_atual: e.target.value })}
+                                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-4 border-t">
+                                <button
+                                    type="button"
+                                    onClick={iniciarExclusao}
+                                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition-colors flex items-center gap-2"
+                                >
+                                    🗑️ Excluir
+                                </button>
+                                <div className="flex-1 flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMostrarModalEditarPeca(false);
+                                            setPecaSelecionada(null);
+                                        }}
+                                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-bold transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition-colors"
+                                    >
+                                        ✓ Salvar Alterações
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* NOVO MODAL: CONFIRMAR EXCLUSÃO */}
+            {mostrarModalConfirmarExclusao && pecaSelecionada && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
+                        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-4 rounded-t-lg">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                ⚠️ Confirmar Exclusão
+                            </h2>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                                <p className="text-red-800 font-bold mb-2">Atenção!</p>
+                                <p className="text-red-700 text-sm">
+                                    Esta ação não pode ser desfeita. O produto será permanentemente removido do sistema.
+                                </p>
+                            </div>
+
+                            <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                                <p className="text-sm text-gray-600 mb-2">Produto a ser excluído:</p>
+                                <p className="font-bold text-lg">{pecaSelecionada.nome}</p>
+                                <p className="text-sm text-gray-500">Código: {pecaSelecionada.id_produto}</p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={cancelarExclusao}
+                                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-bold transition-colors"
+                                >
+                                    ← Voltar
+                                </button>
+                                <button
+                                    onClick={confirmarExclusao}
+                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold shadow-md transition-colors"
+                                >
+                                    🗑️ Confirmar Exclusão
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

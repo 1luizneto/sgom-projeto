@@ -104,59 +104,59 @@ function DashboardMecanico() {
 
   // --- CARREGAR DADOS ---
   const carregarDadosIniciais = async () => {
-      try {
-        // 1. Primeiro, identificar qual mecânico está logado
-        const userName = localStorage.getItem('user_name');
-        const userId = localStorage.getItem('user_id');
-        
-        // 2. Buscar todos os mecânicos para encontrar o ID do logado
-        const mecanicosResp = await api.get('mecanicos/');
-        const mecanicoLogado = mecanicosResp.data.find(m => 
-          m.nome === userName || m.user === parseInt(userId)
-        );
+    try {
+      // 1. Primeiro, identificar qual mecânico está logado
+      const userName = localStorage.getItem('user_name');
+      const userId = localStorage.getItem('user_id');
 
-        console.log('👤 Mecânico logado:', mecanicoLogado);
+      // 2. Buscar todos os mecânicos para encontrar o ID do logado
+      const mecanicosResp = await api.get('mecanicos/');
+      const mecanicoLogado = mecanicosResp.data.find(m =>
+        m.nome === userName || m.user === parseInt(userId)
+      );
 
-        if (!mecanicoLogado) {
-          alert('❌ Erro: Perfil de mecânico não encontrado!');
-          navigate('/');
-          return;
-        }
+      console.log('👤 Mecânico logado:', mecanicoLogado);
 
-        // 3. Carregar APENAS os agendamentos deste mecânico
-        const resp = await Promise.all([
-          api.get(`agendamentos/?mecanico=${mecanicoLogado.id_mecanico}`), // <--- FILTRO AQUI
-          api.get('servicos/'),
-          api.get('clientes/'),
-          api.get('produtos/'),
-          api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] })),
-          api.get('ordens-servico/').catch(err => {
-            console.error('❌ Erro ao carregar OS:', err);
-            return { data: [] };
-          }),
-          api.get('checklists/').catch(() => ({ data: [] })),
-          api.get('orcamentos/').catch(() => ({ data: [] }))
-        ]);
-
-        console.log('📦 DADOS CARREGADOS:');
-        console.log('Agendamentos do mecânico:', resp[0].data);
-        console.log('Ordens de Serviço:', resp[5].data);
-        console.log('Orçamentos:', resp[7].data);
-        console.log('Checklists:', resp[6].data);
-
-        setAgendamentos(resp[0].data);
-        setServicos(resp[1].data);
-        setClientes(resp[2].data);
-        setMecanicos(mecanicosResp.data);
-        setProdutos(resp[3].data || []);
-        setNotificacoes(resp[4].data || []);
-        setOrdensServico(resp[5].data || []);
-        setChecklists(resp[6].data || []);
-        setOrcamentos(resp[7].data || []);
-      } catch (err) {
-        console.error('❌ Erro ao carregar dados:', err);
-        if (err.response?.status === 401) navigate('/');
+      if (!mecanicoLogado) {
+        alert('❌ Erro: Perfil de mecânico não encontrado!');
+        navigate('/');
+        return;
       }
+
+      // 3. Carregar APENAS os agendamentos deste mecânico
+      const resp = await Promise.all([
+        api.get(`agendamentos/?mecanico=${mecanicoLogado.id_mecanico}`), // <--- FILTRO AQUI
+        api.get('servicos/'),
+        api.get('clientes/'),
+        api.get('produtos/'),
+        api.get('notificacoes/?nao_lidas=true').catch(() => ({ data: [] })),
+        api.get('ordens-servico/').catch(err => {
+          console.error('❌ Erro ao carregar OS:', err);
+          return { data: [] };
+        }),
+        api.get('checklists/').catch(() => ({ data: [] })),
+        api.get('orcamentos/').catch(() => ({ data: [] }))
+      ]);
+
+      console.log('📦 DADOS CARREGADOS:');
+      console.log('Agendamentos do mecânico:', resp[0].data);
+      console.log('Ordens de Serviço:', resp[5].data);
+      console.log('Orçamentos:', resp[7].data);
+      console.log('Checklists:', resp[6].data);
+
+      setAgendamentos(resp[0].data);
+      setServicos(resp[1].data);
+      setClientes(resp[2].data);
+      setMecanicos(mecanicosResp.data);
+      setProdutos(resp[3].data || []);
+      setNotificacoes(resp[4].data || []);
+      setOrdensServico(resp[5].data || []);
+      setChecklists(resp[6].data || []);
+      setOrcamentos(resp[7].data || []);
+    } catch (err) {
+      console.error('❌ Erro ao carregar dados:', err);
+      if (err.response?.status === 401) navigate('/');
+    }
   };
 
   const carregarVeiculos = async (clienteId) => {
@@ -537,8 +537,24 @@ function DashboardMecanico() {
 
   const handleLogout = () => { localStorage.removeItem('token'); navigate('/'); };
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const agendamentosHoje = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje);
-  const agendamentosFuturos = agendamentos.filter(ag => new Date(ag.horario_inicio).toLocaleDateString('pt-BR') !== hoje);
+
+  // CORRIGIR OS FILTROS:
+  const agendamentosHoje = agendamentos.filter(ag =>
+    new Date(ag.horario_inicio).toLocaleDateString('pt-BR') === hoje &&
+    ag.status !== 'CONCLUIDO' &&
+    ag.status !== 'CANCELADO'
+  );
+
+  const agendamentosFuturos = agendamentos.filter(ag => {
+    const dataAgendamento = new Date(ag.horario_inicio).toLocaleDateString('pt-BR');
+    return dataAgendamento !== hoje &&
+      ag.status !== 'CONCLUIDO' &&
+      ag.status !== 'CANCELADO';
+  });
+
+  const agendamentosConcluidos = agendamentos.filter(ag =>
+    ag.status === 'CONCLUIDO'
+  );
 
   // NOVAS FUNÇÕES
   const agendamentoTemChecklist = (idAgendamento) => {
@@ -693,7 +709,7 @@ function DashboardMecanico() {
   };
 
   // FILTRAR AGENDAMENTOS CONCLUÍDOS
-  const agendamentosConcluidos = agendamentos.filter(ag => ag.status === 'CONCLUIDO');
+  //const agendamentosConcluidos = agendamentos.filter(ag => ag.status === 'CONCLUIDO');
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
@@ -1735,8 +1751,8 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
             <span className="text-xs text-gray-400 ml-2 block">{diaMes}</span>
           </div>
           <span className={`text-xs px-2 py-1 rounded font-bold ${estaConcluido
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-600'
+            ? 'bg-green-100 text-green-700'
+            : 'bg-gray-100 text-gray-600'
             }`}>
             {estaConcluido ? '✅ CONCLUÍDO' : agendamento.status}
           </span>
@@ -1763,10 +1779,10 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
             {/* Orçamento */}
             {orcamento && (
               <div className={`border rounded p-2 flex items-center gap-2 ${orcamento.status === 'PENDENTE'
-                  ? 'bg-yellow-50 border-yellow-200'
-                  : orcamento.status === 'APROVADO'
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-red-50 border-red-200'
+                ? 'bg-yellow-50 border-yellow-200'
+                : orcamento.status === 'APROVADO'
+                  ? 'bg-green-50 border-green-200'
+                  : 'bg-red-50 border-red-200'
                 }`}>
                 <span className={
                   orcamento.status === 'PENDENTE'
@@ -1779,10 +1795,10 @@ function CardAgendamentoNovo({ agendamento, aoIniciarAtendimento, aoAbrirOrcamen
                 </span>
                 <div className="flex-1">
                   <p className={`text-xs font-bold ${orcamento.status === 'PENDENTE'
-                      ? 'text-yellow-700'
-                      : orcamento.status === 'APROVADO'
-                        ? 'text-green-700'
-                        : 'text-red-700'
+                    ? 'text-yellow-700'
+                    : orcamento.status === 'APROVADO'
+                      ? 'text-green-700'
+                      : 'text-red-700'
                     }`}>
                     {orcamento.status === 'PENDENTE'
                       ? `Orçamento #${orcamento.id_orcamento} - Aguardando Cliente`
